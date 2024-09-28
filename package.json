@@ -1,9 +1,9 @@
 {
     "name": "de.frankenbit.boltwire",
-    "version": "0.0.0",
+    "version": "1.0.0-pre.1",
     "displayName": "BoltWire",
     "description": "Another scary dependency injection framework for Unity 3D.",
-    "unity": "6.0.0",
+    "unity": "6.0",
     "unityRelease": "21f1",
     "documentationUrl": "https://github.com/FrankenBit/BoltWire/wiki",
     "changelogUrl": "https://github.com/FrankenBit/BoltWire/blob/main/CHANGELOG.md",
