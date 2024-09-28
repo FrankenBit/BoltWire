@@ -2,7 +2,6 @@
 using System.Collections.Generic;
 using System.Linq;
 using FrankenBit.BoltWire.Exceptions;
-using JetBrains.Annotations;
 using NUnit.Framework;
 
 namespace FrankenBit.BoltWire;
@@ -336,29 +335,29 @@ public sealed class IntegrationTests
         
     private sealed class Ying : ITestInterface
     {
-        private readonly Yang _yang;
+        private readonly Yang _dependency;
 
-        internal Ying([NotNull] Yang yang) =>
-            _yang = yang ?? throw new ArgumentNullException(nameof(yang));
+        internal Ying(Yang dependency) =>
+            _dependency = dependency ?? throw new ArgumentNullException(nameof(dependency));
 
         public bool Disposed =>
             false;
 
         public string GetText() =>
-            "Ying";
+            $"Ying"+_dependency.GetText();
     }
         
     private sealed class Yang : ITestInterface
     {
-        private readonly Ying _ying;
+        private readonly Ying _dependency;
 
-        internal Yang([NotNull] Ying ying) =>
-            _ying = ying ?? throw new ArgumentNullException(nameof(ying));
+        internal Yang(Ying dependency) =>
+            _dependency = dependency ?? throw new ArgumentNullException(nameof(dependency));
 
         public bool Disposed =>
             false;
 
         public string GetText() =>
-            "Yang";
+            $"{_dependency.GetText()}Yang";
     }
 }

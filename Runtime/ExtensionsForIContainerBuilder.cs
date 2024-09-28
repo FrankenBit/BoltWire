@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Diagnostics.CodeAnalysis;
 using System.Linq;
 using FrankenBit.BoltWire.Exceptions;
 using UnityEngine;
@@ -24,11 +25,14 @@ public static class ExtensionsForIContainerBuilder
         dependencySetup.Invoke(builder);
 
     public static IContainerBuilder<TService>
-        Register<TService>(this IContainerBuilder builder, ServiceLifetime lifetime) =>
+        Register<[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicConstructors)] TService>(
+            this IContainerBuilder builder, ServiceLifetime lifetime) =>
         builder.Register<TService, TService>(lifetime);
 
-    public static IContainerBuilder<TService> Register<TService, TImplementation>(this IContainerBuilder builder,
-        ServiceLifetime lifetime) where TImplementation : TService
+    public static IContainerBuilder<TService> Register<TService,
+        [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicConstructors)]
+        TImplementation>(
+        this IContainerBuilder builder, ServiceLifetime lifetime) where TImplementation : TService
     {
         builder.AddRegistrationSetup(registry => registry.Register<TService, TImplementation>(lifetime));
         return new ContainerBuilder<TService>(builder);
