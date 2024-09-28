@@ -1,11 +1,7 @@
-﻿using JetBrains.Annotations;
+﻿namespace FrankenBit.BoltWire;
 
-namespace FrankenBit.BoltWire
+public static class ExtensionsForIContainer
 {
-    public static class ExtensionsForIContainer
-    {
-        [NotNull]
-        public static IScope CreateScope([NotNull] this IContainer container) =>
-            new Scope(container);
-    }
+    public static IScope CreateScope(this IContainer container) =>
+        new Scope(container);
 }

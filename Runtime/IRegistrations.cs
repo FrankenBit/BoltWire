@@ -1,11 +1,9 @@
 ﻿using System;
-using JetBrains.Annotations;
+using System.Diagnostics.CodeAnalysis;
 
-namespace FrankenBit.BoltWire
+namespace FrankenBit.BoltWire;
+
+internal interface IRegistrations
 {
-    internal interface IRegistrations
-    {
-        [ContractAnnotation("=> true, registration: notnull; => false, registration: null")]
-        bool TryGetRegistration([NotNull] Type serviceType, out IRegistration registration);
-    }
+    bool TryGetRegistration(Type serviceType, [NotNullWhen(true)] out IRegistration? registration);
 }

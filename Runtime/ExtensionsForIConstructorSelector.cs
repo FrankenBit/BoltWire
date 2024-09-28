@@ -1,13 +1,10 @@
 ﻿using System.Reflection;
-using JetBrains.Annotations;
 
-namespace FrankenBit.BoltWire
+namespace FrankenBit.BoltWire;
+
+internal static class ExtensionsForIConstructorSelector
 {
-    internal static class ExtensionsForIConstructorSelector
-    {
-        [NotNull]
-        internal static ConstructorInfo
-            SelectConstructor<TImplementation>([NotNull] this IConstructorSelector selector) =>
-            selector.SelectConstructor(typeof(TImplementation));
-    }
+    internal static ConstructorInfo
+        SelectConstructor<TImplementation>(this IConstructorSelector selector) =>
+        selector.SelectConstructor(typeof(TImplementation));
 }

@@ -1,19 +1,17 @@
 ﻿using System;
-using JetBrains.Annotations;
 
-namespace FrankenBit.BoltWire.Exceptions
+namespace FrankenBit.BoltWire.Exceptions;
+
+public abstract class ServiceResolutionException : ContainerException
 {
-    public abstract class ServiceResolutionException : ContainerException
+    protected ServiceResolutionException(Type serviceType, string message)
+        : base(serviceType, message)
     {
-        protected ServiceResolutionException([NotNull] Type serviceType, string message)
-            : base(serviceType, message)
-        {
-        }
+    }
 
-        protected ServiceResolutionException([NotNull] Type serviceType, [NotNull] string message,
-            [NotNull] Exception innerException)
-            : base(serviceType, message, innerException)
-        {
-        }
+    protected ServiceResolutionException(Type serviceType, string message,
+        Exception innerException)
+        : base(serviceType, message, innerException)
+    {
     }
 }

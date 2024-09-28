@@ -1,26 +1,24 @@
 ﻿using System;
 using System.Collections.Generic;
-using JetBrains.Annotations;
+using FrankenBit.BoltWire.Exceptions;
 
-namespace FrankenBit.BoltWire
+namespace FrankenBit.BoltWire;
+
+internal sealed class ParameterlessFactoryRegistration<TService> : IRegistration
 {
-    internal sealed class ParameterlessFactoryRegistration<TInstance> : IRegistration
+    private readonly Func<TService> _factory;
+
+    internal ParameterlessFactoryRegistration(Func<TService>? factory, ServiceLifetime lifetime)
     {
-        [NotNull]
-        private readonly Func<TInstance> _factory;
-
-        internal ParameterlessFactoryRegistration([NotNull] Func<TInstance> factory, ServiceLifetime lifetime)
-        {
-            _factory = factory ?? throw new ArgumentNullException(nameof(factory));
-            Lifetime = lifetime;
-        }
-
-        public IEnumerable<Type> Dependencies =>
-            Array.Empty<Type>();
-
-        public ServiceLifetime Lifetime { get; }
-
-        public object GetInstance(IDictionary<Type, object> parameters) =>
-            _factory();
+        _factory = factory ?? throw new ArgumentNullException(nameof(factory));
+        Lifetime = lifetime;
     }
+
+    public IEnumerable<Type> Dependencies =>
+        Array.Empty<Type>();
+
+    public ServiceLifetime Lifetime { get; }
+
+    public object GetInstance(IDictionary<Type, object> parameters) =>
+        _factory.Invoke() ?? throw FactoryReturnedNullException.For<TService>();
 }

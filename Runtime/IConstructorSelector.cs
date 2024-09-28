@@ -1,12 +1,9 @@
 ﻿using System;
 using System.Reflection;
-using JetBrains.Annotations;
 
-namespace FrankenBit.BoltWire
+namespace FrankenBit.BoltWire;
+
+public interface IConstructorSelector
 {
-    public interface IConstructorSelector
-    {
-        [NotNull]
-        ConstructorInfo SelectConstructor([NotNull] Type implementationType);
-    }
+    ConstructorInfo SelectConstructor(Type implementationType);
 }

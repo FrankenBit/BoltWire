@@ -1,13 +1,11 @@
 ﻿using System;
-using JetBrains.Annotations;
 
-namespace FrankenBit.BoltWire.Exceptions
+namespace FrankenBit.BoltWire.Exceptions;
+
+public sealed class CircularDependencyException : ServiceCompositionException
 {
-    public sealed class CircularDependencyException : ServiceCompositionException
+    internal CircularDependencyException(Type serviceType, Type dependencyType)
+        : base(serviceType, dependencyType, $"Recursive composition detected for service of type {dependencyType}.")
     {
-        internal CircularDependencyException([NotNull] Type serviceType, [NotNull] Type dependencyType)
-            : base(serviceType, dependencyType, $"Recursive composition detected for service of type {dependencyType}.")
-        {
-        }
     }
 }

@@ -1,11 +1,10 @@
-﻿namespace FrankenBit.BoltWire
+﻿namespace FrankenBit.BoltWire;
+
+public enum ServiceLifetime
 {
-    public enum ServiceLifetime
-    {
-        Singleton,
+    Singleton,
 
-        Scoped,
+    Scoped,
 
-        Transient
-    }
+    Transient
 }

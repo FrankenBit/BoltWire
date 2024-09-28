@@ -1,8 +1,4 @@
-﻿using JetBrains.Annotations;
+﻿namespace FrankenBit.BoltWire;
 
-namespace FrankenBit.BoltWire
-{
-    [NotNull]
-    public delegate TBuilder DependencySetup<TBuilder>([NotNull] TBuilder builder)
-        where TBuilder : IContainerBuilder;
-}
+public delegate TBuilder DependencySetup<TBuilder>(TBuilder builder)
+    where TBuilder : IContainerBuilder;

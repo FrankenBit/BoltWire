@@ -1,9 +1,6 @@
-﻿using JetBrains.Annotations;
+﻿namespace FrankenBit.BoltWire;
 
-namespace FrankenBit.BoltWire
+internal interface ICollectionRegistration : IRegistration
 {
-    internal interface ICollectionRegistration : IRegistration
-    {
-        void Add([NotNull] IRegistration registration);
-    }
+    void Add(IRegistration registration);
 }

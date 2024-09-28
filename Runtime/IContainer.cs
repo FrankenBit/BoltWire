@@ -1,10 +1,8 @@
 ﻿using System;
-using JetBrains.Annotations;
 
-namespace FrankenBit.BoltWire
+namespace FrankenBit.BoltWire;
+
+public interface IContainer : IServiceProvider
 {
-    public interface IContainer : IServiceProvider
-    {
-        ServiceLifetime GetLifetime([NotNull] Type serviceType);
-    }
+    ServiceLifetime GetLifetime(Type serviceType);
 }

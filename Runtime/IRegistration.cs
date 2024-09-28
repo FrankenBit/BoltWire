@@ -1,18 +1,13 @@
 ﻿using System;
 using System.Collections.Generic;
-using JetBrains.Annotations;
 
-namespace FrankenBit.BoltWire
+namespace FrankenBit.BoltWire;
+
+internal interface IRegistration
 {
-    internal interface IRegistration
-    {
-        [ItemNotNull]
-        [NotNull]
-        IEnumerable<Type> Dependencies { get; }
+    IEnumerable<Type> Dependencies { get; }
             
-        ServiceLifetime Lifetime { get; }
+    ServiceLifetime Lifetime { get; }
 
-        [NotNull]
-        object GetInstance([NotNull] IDictionary<Type, object> parameters);
-    }
+    object GetInstance(IDictionary<Type, object> parameters);
 }

@@ -1,46 +1,43 @@
 ﻿using System;
 using System.Collections.Generic;
-using JetBrains.Annotations;
 
-namespace FrankenBit.BoltWire
+namespace FrankenBit.BoltWire;
+
+public sealed class ContainerBuilder : IContainerBuilder
 {
-    public sealed class ContainerBuilder : IContainerBuilder
+    private readonly List<Action<IRegistry>> _registrationSetups = new();
+
+    private RegistrationBuilder? _pendingBuilder;
+
+    public Container Build()
     {
-        private readonly List<Action<IRegistry>> _registrationSetups = new();
+        CommitPendingBuilder(default);
 
-        [CanBeNull]
-        private RegistrationBuilder _pendingBuilder;
-
-        public Container Build()
+        var registry = new Registry(new GreedyConstructorSelector());
+        var container = new Container(registry);
+        foreach (Action<IRegistry> registrationSetup in _registrationSetups)
         {
-            CommitPendingBuilder(default);
-
-            var registry = new Registry(new GreedyConstructorSelector());
-            var container = new Container(registry);
-            foreach (Action<IRegistry> registrationSetup in _registrationSetups)
-            {
-                registrationSetup.Invoke(registry);
-            }
-
-            return container;
+            registrationSetup.Invoke(registry);
         }
 
-        void IContainerBuilder.AddRegistrationSetup(Action<IRegistry> registrationSetup) =>
-            CommitPendingBuilder(new RegistrationBuilder(registrationSetup));
+        return container;
+    }
 
-        private void CommitPendingBuilder([CanBeNull] RegistrationBuilder nextBuilder)
-        {
-            if (_pendingBuilder != null) _registrationSetups.Add(_pendingBuilder.RegistrationSetup);
+    void IContainerBuilder.AddRegistrationSetup(Action<IRegistry> registrationSetup) =>
+        CommitPendingBuilder(new RegistrationBuilder(registrationSetup));
 
-            _pendingBuilder = nextBuilder;
-        }
+    private void CommitPendingBuilder(RegistrationBuilder? nextBuilder)
+    {
+        if (_pendingBuilder != null) _registrationSetups.Add(_pendingBuilder.RegistrationSetup);
 
-        private sealed class RegistrationBuilder
-        {
-            internal RegistrationBuilder([NotNull] Action<IRegistry> registrationSetup) =>
-                RegistrationSetup = registrationSetup ?? throw new ArgumentNullException(nameof(registrationSetup));
+        _pendingBuilder = nextBuilder;
+    }
 
-            internal Action<IRegistry> RegistrationSetup { get; }
-        }
+    private sealed class RegistrationBuilder
+    {
+        internal RegistrationBuilder(Action<IRegistry> registrationSetup) =>
+            RegistrationSetup = registrationSetup ?? throw new ArgumentNullException(nameof(registrationSetup));
+
+        internal Action<IRegistry> RegistrationSetup { get; }
     }
 }

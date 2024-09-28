@@ -1,10 +1,8 @@
 ﻿using System;
-using JetBrains.Annotations;
 
-namespace FrankenBit.BoltWire
+namespace FrankenBit.BoltWire;
+
+public interface IContainerBuilder
 {
-    public interface IContainerBuilder
-    {
-        internal void AddRegistrationSetup([NotNull] Action<IRegistry> registrationSetup);
-    }
+    internal void AddRegistrationSetup(Action<IRegistry> registrationSetup);
 }
