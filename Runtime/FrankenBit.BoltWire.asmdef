@@ -1,6 +1,6 @@
 {
     "name": "FrankenBit.BoltWire",
-    "rootNamespace": "FrankenBit",
+    "rootNamespace": "FrankenBit.BoltWire",
     "references": [],
     "includePlatforms": [],
     "excludePlatforms": [],

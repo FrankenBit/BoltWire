@@ -1,6 +1,6 @@
 {
-    "name": "FrankenBit.BoltWire.Tests",
-    "rootNamespace": "FrankenBit",
+    "name": "FrankenBit.BoltWire.Editor.Tests",
+    "rootNamespace": "FrankenBit.BoltWire",
     "references": [
         "GUID:606f4ec3fe76b844d8e638e512213aae",
         "GUID:0acc523941302664db1f4e527237feb3",
