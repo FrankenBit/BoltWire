@@ -2,7 +2,7 @@
 using System.Collections.Generic;
 using System.Linq;
 
-namespace FrankenBit.BoltWire;
+namespace FrankenBit.BoltWire.Tools;
 
 /// <summary>
 ///     Represents a collection of disposable objects.

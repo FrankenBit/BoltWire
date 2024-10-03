@@ -1,7 +1,8 @@
 ﻿using System;
+using FrankenBit.BoltWire.Tools;
 using UnityEngine;
 
-namespace FrankenBit.BoltWire;
+namespace FrankenBit.BoltWire.Unity3D;
 
 public abstract class LifetimeScope : MonoBehaviour, IDisposable
 {
@@ -12,17 +13,17 @@ public abstract class LifetimeScope : MonoBehaviour, IDisposable
     public void Dispose() =>
         _disposable.Dispose();
 
-    protected abstract void Configure(IContainerBuilder builder);
+    protected abstract void Configure(IServiceCollection services);
        
     private void Awake()
     {
-        var builder = new ContainerBuilder();
-        Configure(builder);
+        var services = new ServiceCollection();
+        Configure(services);
             
-        Container container = builder.Build();
+        ServiceProvider provider = services.Build();
 
-        _disposable.Add(container);
-        _startable.AddRange(container.ResolveAll<IStartable>());
+        _disposable.Add(provider);
+        _startable.AddRange(provider.ResolveAll<IStartable>());
     }
 
     private void OnDestroy() =>
