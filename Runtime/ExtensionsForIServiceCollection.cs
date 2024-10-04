@@ -9,7 +9,8 @@ public static class ExtensionsForIServiceCollection
 {
     public static ServiceProvider Build(this IServiceCollection services)
     {
-        var registry = new ServiceRegistry(new GreedyConstructorSelector());
+        var constructorSelector = new GreedyConstructorSelector();
+        var registry = new ServiceRegistry(constructorSelector);
         foreach (IServiceDescriptor descriptor in services) descriptor.Configure(registry);
 
         return new ServiceProvider(new CollectionCapableServiceRegistry(registry));
@@ -149,7 +150,7 @@ public static class ExtensionsForIServiceCollection
 
         private readonly ServiceLifetime _lifetime;
 
-        public InterfaceServicesDescriptor(ServiceLifetime lifetime, string? key)
+        internal InterfaceServicesDescriptor(ServiceLifetime lifetime, string? key)
         {
             _lifetime = lifetime;
             _key = key;
@@ -157,8 +158,12 @@ public static class ExtensionsForIServiceCollection
 
         public void Configure(IServiceRegistry registry)
         {
+            IServicePartRegistration<TService> partRegistration =
+                ImplementationRegistration.Create<TService, TService>(registry.ConstructorSelector, _lifetime)
+                    .CacheIfSingleton();
+
             foreach (IServiceRegistration registration in registry.GetInterfaceRegistrations<TService>(_key))
-                registration.Register<TService>(_lifetime);
+                registration.Add(partRegistration);
         }
     }
 

@@ -54,6 +54,8 @@ public sealed class ServiceCollection : IServiceCollection
 
 internal interface IServiceRegistry
 {
+    IConstructorSelector ConstructorSelector { get; }
+    
     IServiceRegistration<TService> GetRegistration<TService>(string? key) where TService : class;
     
     bool TryGetRegistration(Type serviceType, string? key, [NotNullWhen(true)] out IServiceRegistration? registration);
@@ -109,6 +111,9 @@ internal sealed class CollectionCapableServiceRegistry : IServiceRegistry
 
     internal CollectionCapableServiceRegistry(IServiceRegistry registry) =>
         _registry = registry;
+
+    public IConstructorSelector ConstructorSelector =>
+        _registry.ConstructorSelector;
 
     public IServiceRegistration<TService> GetRegistration<TService>(string? key) where TService : class =>
         _registry.GetRegistration<TService>(key);
@@ -230,19 +235,19 @@ internal static class SupportedCollectionTypes
 
 internal sealed class ServiceRegistry : IServiceRegistry
 {
-    private readonly IConstructorSelector _constructorSelector;
-
     private readonly Dictionary<Type, IServiceGroupRegistration> _registrations = new();
 
     internal ServiceRegistry(IConstructorSelector constructorSelector) =>
-        _constructorSelector = constructorSelector;
-    
+        ConstructorSelector = constructorSelector;
+
+    public IConstructorSelector ConstructorSelector { get; }
+
     public IServiceRegistration<TService> GetRegistration<TService>(string? key) where TService : class
     {
         ServiceGroupRegistration<TService> typedRegistrations =
             _registrations.TryGetValue(typeof(TService), out IServiceGroupRegistration? descriptors)
                 ? (ServiceGroupRegistration<TService>)descriptors
-                : Store(new ServiceGroupRegistration<TService>(_constructorSelector));
+                : Store(new ServiceGroupRegistration<TService>(ConstructorSelector));
         return typedRegistrations.GetRegistration(key);
     }
 
@@ -273,23 +278,33 @@ internal sealed class ServiceRegistry : IServiceRegistry
     {
         private readonly IConstructorSelector _constructorSelector;
 
-        private readonly List<IServicePartRegistration> _decorators = new();
+        private readonly List<IServicePartRegistration<TService>> _decorators = new();
 
-        private readonly List<IServicePartRegistration> _parts = new();
+        private readonly List<IServicePartRegistration<TService>> _parts = new();
 
-        private IServicePartRegistration? _composite;
+        private IServicePartRegistration<TService>? _composite;
 
         internal ServiceRegistration(IConstructorSelector constructorSelector) =>
             _constructorSelector = constructorSelector;
 
+        public void Add(IServicePartRegistration<TService> registration) =>
+            AddCached(registration.CacheIfSingleton());
+
+        private void AddCached(IServicePartRegistration<TService> registration)
+        {
+            if (IsDecorator(registration)) _decorators.Add(registration);
+            else if (IsComposite(registration)) SetComposite(registration);
+            else _parts.Add(registration);
+        }
+
         public void Register(TService instance) =>
-            _parts.Add(new SingletonRegistration(instance));
+            _parts.Add(new SingletonRegistration<TService>(instance));
 
         public void Register<TImplementation>(ServiceLifetime lifetime) where TImplementation : TService =>
-            Add(ImplementationRegistration.Create<TImplementation>(_constructorSelector, lifetime));
+            Add(ImplementationRegistration.Create<TService, TImplementation>(_constructorSelector, lifetime));
 
         public void Register(Func<IServiceProvider, TService> factory, ServiceLifetime lifetime) =>
-            Add(new FactoryRegistration(factory, lifetime));
+            Add(new FactoryRegistration<TService>(factory, lifetime));
 
         public object Resolve(ServiceContext context) =>
             Decorate(ResolveCompositeOrLast(context), context);
@@ -297,21 +312,11 @@ internal sealed class ServiceRegistry : IServiceRegistry
         IEnumerable IServiceRegistration.ResolveAll(ServiceContext context) =>
             ResolveAll(context);
 
-        private static bool IsComposite(IServicePartRegistration registration) =>
+        private static bool IsComposite(IServicePartRegistration<TService> registration) =>
             SupportedCollectionTypes.For<TService>().Any(registration.Dependencies.Contains);
 
-        private static bool IsDecorator(IServicePartRegistration registration) =>
+        private static bool IsDecorator(IServicePartRegistration<TService> registration) =>
             registration.Dependencies.Contains(typeof(TService));
-
-        private void Add(IServicePartRegistration registration)
-        {
-            if (registration.Lifetime == ServiceLifetime.Singleton)
-                registration = new SingletonCacheRegistration(registration);
-            
-            if (IsDecorator(registration)) _decorators.Add(registration);
-            else if (IsComposite(registration)) SetComposite(registration);
-            else _parts.Add(registration);
-        }
 
         private TService Decorate(TService service, ServiceContext context) =>
             _decorators.Aggregate(service, (current, decorator) => decorator.Resolve(context, current));
@@ -323,157 +328,11 @@ internal sealed class ServiceRegistry : IServiceRegistry
             _composite?.Resolve(context, _parts.Select(part => part.Resolve(context))) ??
             _parts.Last().Resolve(context);
 
-        private void SetComposite(IServicePartRegistration registration)
+        private void SetComposite(IServicePartRegistration<TService> registration)
         {
             if (_composite is not null) throw CompositeAlreadySetException.For<TService>();
 
             _composite = registration;
-        }
-
-        private interface IServicePartRegistration
-        {
-            IEnumerable<Type> Dependencies { get; }
-            
-            ServiceLifetime Lifetime { get; }
-
-            TService Resolve(ServiceContext context, params object[] dependencies) =>
-                Resolve(context, (IEnumerable<object>)dependencies);
-
-            TService Resolve(ServiceContext context, IEnumerable<object> dependencies);
-        }
-
-        private sealed class FactoryRegistration : IServicePartRegistration
-        {
-            private readonly Func<IServiceProvider, TService> _factory;
-
-            internal FactoryRegistration(Func<IServiceProvider, TService> factory, ServiceLifetime lifetime)
-            {
-                _factory = factory;
-                Lifetime = lifetime;
-            }
-
-            public IEnumerable<Type> Dependencies =>
-                Array.Empty<Type>();
-            
-            public ServiceLifetime Lifetime { get; }
-
-            public TService Resolve(ServiceContext context, IEnumerable<object> dependencies) =>
-                context.Track(Create(context), Lifetime);
-
-            private TService Create(ServiceContext context) =>
-                _factory.Invoke(new FactoryServiceProvider(context)) ??
-                throw FactoryReturnedNullException.For<TService>();
-
-            private sealed class FactoryServiceProvider : IServiceProvider
-            {
-                private readonly ServiceContext _context;
-
-                internal FactoryServiceProvider(ServiceContext context) =>
-                    _context = context;
-
-                public object GetService(Type serviceType) =>
-                    GetService(serviceType, default);
-
-                public object GetService(Type serviceType, string? key) =>
-                    _context.GetDependency(typeof(TService), serviceType, key);
-            }
-        }
-
-        private sealed class ImplementationRegistration<TImplementation> : IServicePartRegistration
-            where TImplementation : TService
-        {
-            private readonly ConstructorInfo _constructor;
-
-            private readonly Type[] _dependencies;
-
-            internal ImplementationRegistration(ConstructorInfo constructor, Type[] dependencies,
-                ServiceLifetime lifetime)
-            {
-                _constructor = constructor;
-                _dependencies = dependencies;
-                Lifetime = lifetime;
-            }
-
-            public IEnumerable<Type> Dependencies =>
-                _dependencies;
-            
-            public ServiceLifetime Lifetime { get; }
-
-            public TService Resolve(ServiceContext context, IEnumerable<object> dependencies) =>
-                context.Track(Create(context, dependencies), Lifetime);
-
-            private TService Create(ServiceContext context, IEnumerable<object> dependencies)
-            {
-                List<object> existingDependencies = dependencies.ToList();
-
-                object[] allDependencies = _dependencies
-                    .Except(existingDependencies.Select(dependency => dependency.GetType()))
-                    .Select(type =>
-                        context.GetDependency(typeof(TImplementation), type, default) ??
-                        throw new UnresolvedDependencyException(typeof(TImplementation), type))
-                    .Concat(existingDependencies)
-                    .ToArray();
-
-                return (TService)_constructor.Invoke(allDependencies);
-            }
-        }
-
-        private static class ImplementationRegistration
-        {
-            internal static IServicePartRegistration Create<TImplementation>(IConstructorSelector constructorSelector,
-                ServiceLifetime lifetime) where TImplementation : TService
-            {
-                if (IsTransientHidingDisposable<TImplementation>(lifetime))
-                    throw HiddenDisposableRegistrationException.Of<TService, TImplementation>();
-                
-                ConstructorInfo constructor = constructorSelector.SelectConstructor<TImplementation>();
-                Type[] dependencies = constructor.GetParameters()
-                    .Select(parameter => parameter.ParameterType)
-                    .ToArray();
-                return new ImplementationRegistration<TImplementation>(constructor, dependencies, lifetime);
-            }
-
-            private static bool IsTransientHidingDisposable<TImplementation>(ServiceLifetime lifetime)
-                where TImplementation : TService =>
-                lifetime == ServiceLifetime.Transient &&
-                typeof(IDisposable).IsAssignableFrom(typeof(TImplementation)) &&
-                !typeof(IDisposable).IsAssignableFrom(typeof(TService));
-        }
-
-        private sealed class SingletonRegistration : IServicePartRegistration
-        {
-            private readonly TService _instance;
-
-            internal SingletonRegistration(TService instance) =>
-                _instance = instance;
-
-            public IEnumerable<Type> Dependencies =>
-                Array.Empty<Type>();
-
-            public ServiceLifetime Lifetime =>
-                ServiceLifetime.Singleton;
-
-            public TService Resolve(ServiceContext context, IEnumerable<object> dependencies) =>
-                _instance;
-        }
-
-        private sealed class SingletonCacheRegistration : IServicePartRegistration
-        {
-            private readonly IServicePartRegistration _registration;
-
-            private TService? _instance;
-
-            internal SingletonCacheRegistration(IServicePartRegistration registration) =>
-                _registration = registration;
-
-            public IEnumerable<Type> Dependencies =>
-                _instance is null ? _registration.Dependencies : Array.Empty<Type>();
-
-            public ServiceLifetime Lifetime =>
-                ServiceLifetime.Singleton;
-
-            public TService Resolve(ServiceContext context, IEnumerable<object> dependencies) =>
-                _instance ??= _registration.Resolve(context, dependencies);
         }
     }
 
@@ -519,6 +378,180 @@ internal sealed class ServiceRegistry : IServiceRegistry
     }
 }
 
+internal sealed class FactoryRegistration<TService> : IServicePartRegistration<TService> where TService : class
+{
+    private readonly Func<IServiceProvider, TService> _factory;
+
+    internal FactoryRegistration(Func<IServiceProvider, TService> factory, ServiceLifetime lifetime)
+    {
+        _factory = factory;
+        Lifetime = lifetime;
+    }
+
+    public IEnumerable<Type> Dependencies =>
+        Array.Empty<Type>();
+
+    public bool IsCaching =>
+        false;
+
+    public ServiceLifetime Lifetime { get; }
+
+    public TService Resolve(ServiceContext context, IEnumerable<object> dependencies) =>
+        context.Track(Create(context), Lifetime);
+
+    private TService Create(ServiceContext context) =>
+        _factory.Invoke(new FactoryServiceProvider(context)) ??
+        throw FactoryReturnedNullException.For<TService>();
+
+    private sealed class FactoryServiceProvider : IServiceProvider
+    {
+        private readonly ServiceContext _context;
+
+        internal FactoryServiceProvider(ServiceContext context) =>
+            _context = context;
+
+        public object GetService(Type serviceType) =>
+            GetService(serviceType, default);
+
+        public object GetService(Type serviceType, string? key) =>
+            _context.GetDependency(typeof(TService), serviceType, key);
+    }
+}
+
+internal sealed class SingletonRegistration<TService> : IServicePartRegistration<TService> where TService : class
+{
+    private readonly TService _instance;
+
+    internal SingletonRegistration(TService instance) =>
+        _instance = instance;
+
+    public IEnumerable<Type> Dependencies =>
+        Array.Empty<Type>();
+
+    public bool IsCaching =>
+        true;
+
+    public ServiceLifetime Lifetime =>
+        ServiceLifetime.Singleton;
+
+    public TService Resolve(ServiceContext context, IEnumerable<object> dependencies) =>
+        _instance;
+}
+
+internal static class ExtensionsForIServicePartRegistration
+{
+    internal static IServicePartRegistration<TService> CacheIfSingleton<TService>(
+        this IServicePartRegistration<TService> registration) where TService : class =>
+        registration is { Lifetime: ServiceLifetime.Singleton, IsCaching: false }
+            ? new SingletonCacheRegistration<TService>(registration)
+            : registration;
+}
+
+internal sealed class SingletonCacheRegistration<TService> : IServicePartRegistration<TService> where TService : class
+{
+    private readonly IServicePartRegistration<TService> _registration;
+
+    private TService? _instance;
+
+    internal SingletonCacheRegistration(IServicePartRegistration<TService> registration) =>
+        _registration = registration;
+
+    public IEnumerable<Type> Dependencies =>
+        _instance is null ? _registration.Dependencies : Array.Empty<Type>();
+
+    public bool IsCaching =>
+        true;
+
+    public ServiceLifetime Lifetime =>
+        ServiceLifetime.Singleton;
+
+    public TService Resolve(ServiceContext context, IEnumerable<object> dependencies) =>
+        _instance ??= _registration.Resolve(context, dependencies);
+}
+
+internal sealed class ImplementationRegistration<TService, TImplementation> : IServicePartRegistration<TService>
+    where TService : class where TImplementation : TService
+{
+    private readonly ConstructorInfo _constructor;
+
+    private readonly Type[] _dependencies;
+
+    internal ImplementationRegistration(ConstructorInfo constructor, Type[] dependencies,
+        ServiceLifetime lifetime)
+    {
+        _constructor = constructor;
+        _dependencies = dependencies;
+        Lifetime = lifetime;
+    }
+
+    public IEnumerable<Type> Dependencies =>
+        _dependencies;
+
+    public bool IsCaching =>
+        false;
+
+    public ServiceLifetime Lifetime { get; }
+
+    public TService Resolve(ServiceContext context, IEnumerable<object> dependencies) =>
+        context.Track(Create(context, dependencies), Lifetime);
+
+    private TService Create(ServiceContext context, IEnumerable<object> dependencies)
+    {
+        List<object> existingDependencies = dependencies.ToList();
+
+        object[] allDependencies = _dependencies
+            .Except(existingDependencies.Select(dependency => dependency.GetType()))
+            .Select(type =>
+                context.GetDependency(typeof(TImplementation), type, default) ??
+                throw new UnresolvedDependencyException(typeof(TImplementation), type))
+            .Concat(existingDependencies)
+            .ToArray();
+
+        return (TService)_constructor.Invoke(allDependencies);
+    }
+}
+
+internal static class ImplementationRegistration
+{
+    internal static IServicePartRegistration<TService> Create<TService, TImplementation>(
+        IConstructorSelector constructorSelector, ServiceLifetime lifetime)
+        where TService : class
+        where TImplementation : TService
+    {
+        if (IsTransientHidingDisposable<TService, TImplementation>(lifetime))
+            throw HiddenDisposableRegistrationException.Of<TService, TImplementation>();
+
+        ConstructorInfo constructor = constructorSelector.SelectConstructor<TImplementation>();
+        Type[] dependencies = constructor.GetParameters()
+            .Select(parameter => parameter.ParameterType)
+            .ToArray();
+        return new ImplementationRegistration<TService, TImplementation>(constructor, dependencies, lifetime);
+    }
+
+    private static bool IsTransientHidingDisposable<TService, TImplementation>(ServiceLifetime lifetime)
+        where TImplementation : TService =>
+        lifetime == ServiceLifetime.Transient &&
+        typeof(IDisposable).IsAssignableFrom(typeof(TImplementation)) &&
+        !typeof(IDisposable).IsAssignableFrom(typeof(TService));
+}
+
+internal interface IServicePartRegistration
+{
+    IEnumerable<Type> Dependencies { get; }
+    
+    bool IsCaching { get; }
+
+    ServiceLifetime Lifetime { get; }
+}
+
+internal interface IServicePartRegistration<out TService> : IServicePartRegistration where TService : class
+{
+    TService Resolve(ServiceContext context, IEnumerable<object> dependencies);
+
+    TService Resolve(ServiceContext context, params object[] dependencies) =>
+        Resolve(context, (IEnumerable<object>)dependencies);
+}
+
 internal interface IServiceRegistration
 {
     object Resolve(ServiceContext context);
@@ -528,6 +561,8 @@ internal interface IServiceRegistration
 
 internal interface IServiceRegistration<in TService> : IServiceRegistration where TService : class
 {
+    void Add(IServicePartRegistration<TService> registration);
+    
     void Register(TService instance);
 
     void Register<TImplementation>(ServiceLifetime lifetime) where TImplementation : TService;
@@ -537,6 +572,23 @@ internal interface IServiceRegistration<in TService> : IServiceRegistration wher
 
 internal static class ExtensionsForIServiceRegistration
 {
+    private const BindingFlags Binding = BindingFlags.Static | BindingFlags.NonPublic;
+
+    internal static void Add<TImplementation>(this IServiceRegistration registration,
+        IServicePartRegistration<TImplementation> partRegistration)
+        where TImplementation : class
+    {
+        Type registrationType = registration.GetType();
+        if (!registrationType.IsGenericType) throw new InvalidOperationException();
+
+        Type serviceType = registrationType.GetGenericArguments().Single();
+        if (!serviceType.IsAssignableFrom(typeof(TImplementation))) throw new InvalidOperationException();
+
+        typeof(ExtensionsForIServiceRegistration).GetMethod(nameof(AddTyped), Binding)!
+            .MakeGenericMethod(serviceType, typeof(TImplementation))
+            .Invoke(default, new object[] { registration, partRegistration });
+    }
+
     internal static void Register<TService>(this IServiceRegistration registration, TService instance)
         where TService : class
     {
@@ -552,4 +604,10 @@ internal static class ExtensionsForIServiceRegistration
 
         typedRegistration.Register<TService>(lifetime);
     }
+
+    private static void AddTyped<TService, TImplementation>(this IServiceRegistration registration,
+        IServicePartRegistration<TImplementation> partRegistration)
+        where TService : class
+        where TImplementation : class, TService =>
+        ((IServiceRegistration<TService>)registration).Add(partRegistration);
 }
