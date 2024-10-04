@@ -540,15 +540,16 @@ internal static class ExtensionsForIServiceRegistration
     internal static void Register<TService>(this IServiceRegistration registration, TService instance)
         where TService : class
     {
-        Type registrationServiceType = registration.GetType().GetGenericArguments().Single();
-        registration.GetType()
-            .GetMethod(nameof(IServiceRegistration<TService>.Register), new[] { registrationServiceType })!
-            .Invoke(registration, new object?[] { instance });
+        if (registration is not IServiceRegistration<TService> typedRegistration) throw new InvalidOperationException();
+
+        typedRegistration.Register(instance);
     }
 
     internal static void Register<TService>(this IServiceRegistration registration, ServiceLifetime lifetime)
-        where TService : class =>
-        registration.GetType()
-            .GetMethod(nameof(IServiceRegistration<TService>.Register), new[] { typeof(ServiceLifetime) })!
-            .Invoke(registration, new object?[] { lifetime });
+        where TService : class
+    {
+        if (registration is not IServiceRegistration<TService> typedRegistration) throw new InvalidOperationException();
+
+        typedRegistration.Register<TService>(lifetime);
+    }
 }
