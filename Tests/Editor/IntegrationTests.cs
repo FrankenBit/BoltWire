@@ -45,10 +45,10 @@ public sealed class IntegrationTests
     public void Resolve_Composite_DoesResolveComposite()
     {
         var services = new ServiceCollection();
-        ExtensionsForIServiceCollection
-            .Register<ITestInterface, TestComposite>(services
-                .Register<ITestInterface, Foo>(ServiceLifetime.Scoped)
-                .Register<ITestInterface, Bar>(ServiceLifetime.Scoped), ServiceLifetime.Scoped);
+        services
+            .Register<ITestInterface, Foo>(ServiceLifetime.Scoped)
+            .Register<ITestInterface, Bar>(ServiceLifetime.Scoped)
+            .Register<ITestInterface, TestComposite>(ServiceLifetime.Scoped);
         using ServiceProvider provider = services.Build();
 
         var actual = provider.Resolve<ITestInterface>();
@@ -84,11 +84,11 @@ public sealed class IntegrationTests
     public void Resolve_CompositeDependency_DoesResolveAll()
     {
         var services = new ServiceCollection();
-        ExtensionsForIServiceCollection
-            .Register<Baz>(services
-                .Register<ITestInterface, Foo>(ServiceLifetime.Scoped)
-                .Register<ITestInterface, Bar>(ServiceLifetime.Scoped)
-                .Register<Bar>(ServiceLifetime.Scoped), ServiceLifetime.Scoped);
+        services
+            .Register<ITestInterface, Foo>(ServiceLifetime.Scoped)
+            .Register<ITestInterface, Bar>(ServiceLifetime.Scoped)
+            .Register<Bar>(ServiceLifetime.Scoped)
+            .Register<Baz>(ServiceLifetime.Scoped);
         using ServiceProvider provider = services.Build();
 
         var actual = provider.Resolve<Baz>();

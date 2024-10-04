@@ -119,7 +119,9 @@ public sealed class ServiceProvider : IDisposable, IServiceProvider
         GetService(serviceType);
 
     public object? GetService(Type serviceType, string? key = default) =>
-        _registry.GetService(new ServiceContext(_registry, _disposables.Add), serviceType, key);
+        _registry.TryGetRegistration(serviceType, key, out IServiceRegistration? registration)
+            ? registration.Resolve(new ServiceContext(_registry, _disposables.Add))
+            : default;
 }
 
 internal sealed class ServiceContext
@@ -127,6 +129,8 @@ internal sealed class ServiceContext
     private readonly Action<IDisposable> _disposableStore;
 
     private readonly IServiceRegistry _registry;
+    
+    private readonly Stack<Type> _resolutionStack = new();
 
     internal ServiceContext(IServiceRegistry registry, Action<IDisposable> disposableStore)
     {
@@ -134,8 +138,22 @@ internal sealed class ServiceContext
         _disposableStore = disposableStore;
     }
 
-    public object? GetService(Type serviceType, string? key) =>
-        _registry.GetService(this, serviceType, key);
+    public object? GetDependency(Type serviceType, Type dependencyType, string? key)
+    {
+        if (!_registry.TryGetRegistration(dependencyType, key, out IServiceRegistration? registration))
+            throw new UnresolvedDependencyException(serviceType, dependencyType);
+
+        if (_resolutionStack.TryPeek(out Type currentServiceType) && currentServiceType == dependencyType)
+            return registration.Resolve(this);
+        
+        if (_resolutionStack.Contains(dependencyType))
+            throw new CircularDependencyException(serviceType, dependencyType);
+        
+        _resolutionStack.Push(dependencyType);
+        object result = registration.Resolve(this);
+        _resolutionStack.Pop();
+        return result;
+    }
 
     public TService Track<TService>(TService service, ServiceLifetime lifetime) where TService : class
     {
@@ -265,7 +283,7 @@ internal sealed class ServiceRegistry : IServiceRegistry
                     GetService(serviceType, default);
 
                 public object? GetService(Type serviceType, string? key) =>
-                    _context.GetService(serviceType, key);
+                    _context.GetDependency(typeof(TService), serviceType, key);
             }
         }
 
@@ -296,7 +314,7 @@ internal sealed class ServiceRegistry : IServiceRegistry
             {
                 object[] dependencies = _dependencies
                     .Select(type =>
-                        context.GetService(type, default) ??
+                        context.GetDependency(typeof(TImplementation), type, default) ??
                         throw new UnresolvedDependencyException(typeof(TImplementation), type))
                     .ToArray();
 
