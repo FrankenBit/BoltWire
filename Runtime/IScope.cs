@@ -200,16 +200,25 @@ internal sealed class ServiceRegistry : IServiceRegistry
             _parts.Add(new SingletonRegistration(instance));
 
         public void Register<TImplementation>(ServiceLifetime lifetime) where TImplementation : TService =>
-            _parts.Add(new ImplementationRegistration<TImplementation>(_constructorSelector, lifetime));
+            Add(ImplementationRegistration.Create<TImplementation>(_constructorSelector, lifetime));
 
         public void Register(Func<IServiceProvider, TService> factory, ServiceLifetime lifetime) =>
-            _parts.Add(new FactoryRegistration(factory, lifetime));
+            Add(new FactoryRegistration(factory, lifetime));
 
         public object Resolve(ServiceContext serviceContext) =>
             _parts.Last().Resolve(serviceContext);
 
+        private void Add(IServicePartRegistration registration) =>
+            _parts.Add(registration.Lifetime == ServiceLifetime.Singleton
+                ? new SingletonCacheRegistration(registration)
+                : registration);
+
         private interface IServicePartRegistration
         {
+            IEnumerable<Type> Dependencies { get; }
+            
+            ServiceLifetime Lifetime { get; }
+            
             object Resolve(ServiceContext context);
         }
 
@@ -217,13 +226,16 @@ internal sealed class ServiceRegistry : IServiceRegistry
         {
             private readonly Func<IServiceProvider, TService> _factory;
 
-            private readonly ServiceLifetime _lifetime;
-
             internal FactoryRegistration(Func<IServiceProvider, TService> factory, ServiceLifetime lifetime)
             {
                 _factory = factory;
-                _lifetime = lifetime;
+                Lifetime = lifetime;
             }
+
+            public IEnumerable<Type> Dependencies =>
+                Array.Empty<Type>();
+            
+            public ServiceLifetime Lifetime { get; }
 
             public object Resolve(ServiceContext context) =>
                 _factory.Invoke(new FactoryServiceProvider(context)) ??
@@ -247,28 +259,45 @@ internal sealed class ServiceRegistry : IServiceRegistry
         private sealed class ImplementationRegistration<TImplementation> : IServicePartRegistration
             where TImplementation : TService
         {
-            private readonly IConstructorSelector _constructorSelector;
+            private readonly ConstructorInfo _constructor;
 
-            private readonly ServiceLifetime _lifetime;
+            private readonly Type[] _dependencies;
 
-            internal ImplementationRegistration(IConstructorSelector constructorSelector, ServiceLifetime lifetime)
+            internal ImplementationRegistration(ConstructorInfo constructor, Type[] dependencies,
+                ServiceLifetime lifetime)
             {
-                _constructorSelector = constructorSelector;
-                _lifetime = lifetime;
+                _constructor = constructor;
+                _dependencies = dependencies;
+                Lifetime = lifetime;
             }
+
+            public IEnumerable<Type> Dependencies =>
+                _dependencies;
+            
+            public ServiceLifetime Lifetime { get; }
 
             public object Resolve(ServiceContext context)
             {
-                ConstructorInfo constructor = _constructorSelector.SelectConstructor<TImplementation>();
-
-                object[] dependencies = constructor.GetParameters()
-                    .Select(parameter => parameter.ParameterType)
+                object[] dependencies = _dependencies
                     .Select(type =>
                         context.GetService(type, default) ??
                         throw new UnresolvedDependencyException(typeof(TImplementation), type))
                     .ToArray();
 
-                return constructor.Invoke(dependencies);
+                return _constructor.Invoke(dependencies);
+            }
+        }
+
+        private static class ImplementationRegistration
+        {
+            internal static IServicePartRegistration Create<TImplementation>(IConstructorSelector constructorSelector,
+                ServiceLifetime lifetime) where TImplementation : TService
+            {
+                ConstructorInfo constructor = constructorSelector.SelectConstructor<TImplementation>();
+                Type[] dependencies = constructor.GetParameters()
+                    .Select(parameter => parameter.ParameterType)
+                    .ToArray();
+                return new ImplementationRegistration<TImplementation>(constructor, dependencies, lifetime);
             }
         }
 
@@ -279,8 +308,33 @@ internal sealed class ServiceRegistry : IServiceRegistry
             internal SingletonRegistration(TService instance) =>
                 _instance = instance;
 
+            public IEnumerable<Type> Dependencies =>
+                Array.Empty<Type>();
+
+            public ServiceLifetime Lifetime =>
+                ServiceLifetime.Singleton;
+
             public object Resolve(ServiceContext context) =>
                 _instance!;
+        }
+
+        private sealed class SingletonCacheRegistration : IServicePartRegistration
+        {
+            private readonly IServicePartRegistration _registration;
+
+            private TService? _instance;
+
+            internal SingletonCacheRegistration(IServicePartRegistration registration) =>
+                _registration = registration;
+
+            public IEnumerable<Type> Dependencies =>
+                _instance is null ? _registration.Dependencies : Array.Empty<Type>();
+
+            public ServiceLifetime Lifetime =>
+                ServiceLifetime.Singleton;
+
+            public object Resolve(ServiceContext context) =>
+                _instance ??= (TService)_registration.Resolve(context)!;
         }
     }
 
