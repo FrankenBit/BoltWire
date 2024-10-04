@@ -309,12 +309,21 @@ internal sealed class ServiceRegistry : IServiceRegistry
             internal static IServicePartRegistration Create<TImplementation>(IConstructorSelector constructorSelector,
                 ServiceLifetime lifetime) where TImplementation : TService
             {
+                if (IsTransientHidingDisposable<TImplementation>(lifetime))
+                    throw HiddenDisposableRegistrationException.Of<TService, TImplementation>();
+                
                 ConstructorInfo constructor = constructorSelector.SelectConstructor<TImplementation>();
                 Type[] dependencies = constructor.GetParameters()
                     .Select(parameter => parameter.ParameterType)
                     .ToArray();
                 return new ImplementationRegistration<TImplementation>(constructor, dependencies, lifetime);
             }
+
+            private static bool IsTransientHidingDisposable<TImplementation>(ServiceLifetime lifetime)
+                where TImplementation : TService =>
+                lifetime == ServiceLifetime.Transient &&
+                typeof(IDisposable).IsAssignableFrom(typeof(TImplementation)) &&
+                !typeof(IDisposable).IsAssignableFrom(typeof(TService));
         }
 
         private sealed class SingletonRegistration : IServicePartRegistration
