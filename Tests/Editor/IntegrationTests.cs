@@ -40,7 +40,7 @@ public sealed class IntegrationTests
 
         Assert.That(foo?.Disposed, Is.True);
     }
-        
+
     [Test]
     public void Resolve_Composite_DoesResolveComposite()
     {
@@ -48,6 +48,7 @@ public sealed class IntegrationTests
         services
             .Register<ITestInterface, Foo>(ServiceLifetime.Scoped)
             .Register<ITestInterface, Bar>(ServiceLifetime.Scoped)
+            .Register<Bar>(ServiceLifetime.Scoped)
             .Register<ITestInterface, TestComposite>(ServiceLifetime.Scoped);
         using ServiceProvider provider = services.Build();
 

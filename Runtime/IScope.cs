@@ -18,6 +18,9 @@ public interface IScope : IDisposable, IServiceProvider
     bool TryGetExistingInstance(Type serviceType, out object instance); 
 }
 
+// TODO: if an implementation is registered as a singleton with multiple interfaces, the singleton instance is created multiple times
+// TODO: but only one instance should be created and shared between all interfaces
+
 public delegate TServices ServiceSetup<TServices>(TServices services) where TServices : IServiceCollection;
 
 public interface IServiceDescriptor
@@ -126,8 +129,9 @@ internal sealed class CollectionCapableServiceRegistry : IServiceRegistry
     private bool TryGetCollectionRegistration(Type serviceCollectionType, string? key, out IServiceRegistration? registration)
     {
         registration = default;
-        Type serviceType = serviceCollectionType.GenericTypeArguments.Single();
+        if (serviceCollectionType.GenericTypeArguments.Length != 1) return false;
 
+        Type serviceType = serviceCollectionType.GenericTypeArguments.Single();
         if (!SupportedCollectionTypes.For(serviceType).Contains(serviceCollectionType)) return false;
 
         if (!_registry.TryGetRegistration(serviceType, key, out IServiceRegistration? innerRegistration))
@@ -325,7 +329,7 @@ internal sealed class ServiceRegistry : IServiceRegistry
             _parts.Select(part => Decorate(part.Resolve(context), context)).ToArray();
 
         private TService ResolveCompositeOrLast(ServiceContext context) =>
-            _composite?.Resolve(context, _parts.Select(part => part.Resolve(context))) ??
+            _composite?.Resolve(context, new object[] { _parts.Select(part => part.Resolve(context)).ToArray() }) ??
             _parts.Last().Resolve(context);
 
         private void SetComposite(IServicePartRegistration<TService> registration)
@@ -396,7 +400,7 @@ internal sealed class FactoryRegistration<TService> : IServicePartRegistration<T
 
     public ServiceLifetime Lifetime { get; }
 
-    public TService Resolve(ServiceContext context, IEnumerable<object> dependencies) =>
+    public TService Resolve(ServiceContext context, IReadOnlyCollection<object> dependencies) =>
         context.Track(Create(context), Lifetime);
 
     private TService Create(ServiceContext context) =>
@@ -434,7 +438,7 @@ internal sealed class SingletonRegistration<TService> : IServicePartRegistration
     public ServiceLifetime Lifetime =>
         ServiceLifetime.Singleton;
 
-    public TService Resolve(ServiceContext context, IEnumerable<object> dependencies) =>
+    public TService Resolve(ServiceContext context, IReadOnlyCollection<object> dependencies) =>
         _instance;
 }
 
@@ -465,7 +469,7 @@ internal sealed class SingletonCacheRegistration<TService> : IServicePartRegistr
     public ServiceLifetime Lifetime =>
         ServiceLifetime.Singleton;
 
-    public TService Resolve(ServiceContext context, IEnumerable<object> dependencies) =>
+    public TService Resolve(ServiceContext context, IReadOnlyCollection<object> dependencies) =>
         _instance ??= _registration.Resolve(context, dependencies);
 }
 
@@ -492,19 +496,20 @@ internal sealed class ImplementationRegistration<TService, TImplementation> : IS
 
     public ServiceLifetime Lifetime { get; }
 
-    public TService Resolve(ServiceContext context, IEnumerable<object> dependencies) =>
+    public TService Resolve(ServiceContext context, IReadOnlyCollection<object> dependencies) =>
         context.Track(Create(context, dependencies), Lifetime);
 
-    private TService Create(ServiceContext context, IEnumerable<object> dependencies)
+    private TService Create(ServiceContext context, IReadOnlyCollection<object> dependencies)
     {
-        List<object> existingDependencies = dependencies.ToList();
+        List<Type> suppliedTypes = dependencies.Select(dependency => dependency.GetType()).ToList();
 
         object[] allDependencies = _dependencies
-            .Except(existingDependencies.Select(dependency => dependency.GetType()))
+            .Where(dependency => !suppliedTypes.Any(dependency.IsAssignableFrom))
             .Select(type =>
                 context.GetDependency(typeof(TImplementation), type, default) ??
                 throw new UnresolvedDependencyException(typeof(TImplementation), type))
-            .Concat(existingDependencies)
+            .Concat(dependencies.Where(dependency =>
+                _dependencies.Any(desired => desired.IsAssignableFrom(dependency.GetType()))))
             .ToArray();
 
         return (TService)_constructor.Invoke(allDependencies);
@@ -546,10 +551,10 @@ internal interface IServicePartRegistration
 
 internal interface IServicePartRegistration<out TService> : IServicePartRegistration where TService : class
 {
-    TService Resolve(ServiceContext context, IEnumerable<object> dependencies);
+    TService Resolve(ServiceContext context, IReadOnlyCollection<object> dependencies);
 
     TService Resolve(ServiceContext context, params object[] dependencies) =>
-        Resolve(context, (IEnumerable<object>)dependencies);
+        Resolve(context, (IReadOnlyCollection<object>)dependencies);
 }
 
 internal interface IServiceRegistration
