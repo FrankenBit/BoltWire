@@ -12,7 +12,7 @@ public static class ExtensionsForIServiceCollection
         var registry = new ServiceRegistry(new GreedyConstructorSelector());
         foreach (IServiceDescriptor descriptor in services) descriptor.Configure(registry);
 
-        return new ServiceProvider(registry);
+        return new ServiceProvider(new CollectionCapableServiceRegistry(registry));
     }
 
     public static IPendingImplementation<TService> Register<TService>(this IServiceCollection services,

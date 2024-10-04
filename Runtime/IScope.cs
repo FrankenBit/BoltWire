@@ -103,6 +103,50 @@ public interface IServiceProvider : System.IServiceProvider
     object? GetService(Type serviceType, string? key);
 }
 
+internal sealed class CollectionCapableServiceRegistry : IServiceRegistry
+{
+    private readonly IServiceRegistry _registry;
+
+    internal CollectionCapableServiceRegistry(IServiceRegistry registry) =>
+        _registry = registry;
+
+    public IServiceRegistration<TService> GetRegistration<TService>(string? key) where TService : class =>
+        _registry.GetRegistration<TService>(key);
+
+    public bool TryGetRegistration(Type serviceType, string? key,
+        [NotNullWhen(true)] out IServiceRegistration? registration) =>
+        _registry.TryGetRegistration(serviceType, key, out registration) ||
+        TryGetCollectionRegistration(serviceType, key, out registration);
+
+    private bool TryGetCollectionRegistration(Type serviceCollectionType, string? key, out IServiceRegistration? registration)
+    {
+        registration = default;
+        Type serviceType = serviceCollectionType.GenericTypeArguments.Single();
+
+        if (!SupportedCollectionTypes.For(serviceType).Contains(serviceCollectionType)) return false;
+
+        if (!_registry.TryGetRegistration(serviceType, key, out IServiceRegistration? innerRegistration))
+            return false;
+
+        registration = new ResolveAllRegistration(innerRegistration);
+        return true;
+    }
+
+    private sealed class ResolveAllRegistration : IServiceRegistration
+    {
+        private readonly IServiceRegistration _registration;
+
+        internal ResolveAllRegistration(IServiceRegistration registration) =>
+            _registration = registration;
+
+        public object Resolve(ServiceContext context) =>
+            _registration.ResolveAll(context);
+
+        public IEnumerable ResolveAll(ServiceContext context) =>
+            new[] { Resolve(context) };
+    }
+}
+
 public sealed class ServiceProvider : IDisposable, IServiceProvider
 {
     private readonly CompositeDisposable _disposables = new();
@@ -138,7 +182,7 @@ internal sealed class ServiceContext
         _disposableStore = disposableStore;
     }
 
-    public object? GetDependency(Type serviceType, Type dependencyType, string? key)
+    public object GetDependency(Type serviceType, Type dependencyType, string? key)
     {
         if (!_registry.TryGetRegistration(dependencyType, key, out IServiceRegistration? registration))
             throw new UnresolvedDependencyException(serviceType, dependencyType);
@@ -162,6 +206,26 @@ internal sealed class ServiceContext
         
         return service;
     }
+}
+
+internal static class SupportedCollectionTypes
+{
+    private const BindingFlags Binding = BindingFlags.Static | BindingFlags.NonPublic;
+    
+    internal static IReadOnlyCollection<Type> For<TService>() =>
+        new[]
+        {
+            typeof(IEnumerable<TService>),
+            typeof(IReadOnlyCollection<TService>),
+            typeof(TService[])
+        };
+
+    internal static IReadOnlyCollection<Type> For(Type serviceType) =>
+        (IReadOnlyCollection<Type>)GetGenericVariant(serviceType).Invoke(null, Array.Empty<object>());
+
+    private static MethodInfo GetGenericVariant(Type serviceType) =>
+        typeof(SupportedCollectionTypes).GetMethod(nameof(For), Binding, default, Type.EmptyTypes, default)!
+            .MakeGenericMethod(serviceType);
 }
 
 internal sealed class ServiceRegistry : IServiceRegistry
@@ -192,10 +256,10 @@ internal sealed class ServiceRegistry : IServiceRegistry
     }
 
     private ServiceGroupRegistration<TService> Store<TService>(
-        ServiceGroupRegistration<TService> serviceGroupRegistration) where TService : class
+        ServiceGroupRegistration<TService> registration) where TService : class
     {
-        _registrations[typeof(TService)] = serviceGroupRegistration;
-        return serviceGroupRegistration;
+        _registrations[typeof(TService)] = registration;
+        return registration;
     }
 
     private interface IServiceGroupRegistration
@@ -218,12 +282,6 @@ internal sealed class ServiceRegistry : IServiceRegistry
         internal ServiceRegistration(IConstructorSelector constructorSelector) =>
             _constructorSelector = constructorSelector;
 
-        public void Decorate<TDecorator>() where TDecorator : TService
-        {
-            // maybe the decorators could also be registered using the regular Register<TImplementation> method?
-            throw new NotImplementedException();
-        }
-
         public void Register(TService instance) =>
             _parts.Add(new SingletonRegistration(instance));
 
@@ -233,21 +291,55 @@ internal sealed class ServiceRegistry : IServiceRegistry
         public void Register(Func<IServiceProvider, TService> factory, ServiceLifetime lifetime) =>
             Add(new FactoryRegistration(factory, lifetime));
 
-        public object Resolve(ServiceContext serviceContext) =>
-            _parts.Last().Resolve(serviceContext);
+        public object Resolve(ServiceContext context) =>
+            Decorate(ResolveCompositeOrLast(context), context);
 
-        private void Add(IServicePartRegistration registration) =>
-            _parts.Add(registration.Lifetime == ServiceLifetime.Singleton
-                ? new SingletonCacheRegistration(registration)
-                : registration);
+        IEnumerable IServiceRegistration.ResolveAll(ServiceContext context) =>
+            ResolveAll(context);
+
+        private static bool IsComposite(IServicePartRegistration registration) =>
+            SupportedCollectionTypes.For<TService>().Any(registration.Dependencies.Contains);
+
+        private static bool IsDecorator(IServicePartRegistration registration) =>
+            registration.Dependencies.Contains(typeof(TService));
+
+        private void Add(IServicePartRegistration registration)
+        {
+            if (registration.Lifetime == ServiceLifetime.Singleton)
+                registration = new SingletonCacheRegistration(registration);
+            
+            if (IsDecorator(registration)) _decorators.Add(registration);
+            else if (IsComposite(registration)) SetComposite(registration);
+            else _parts.Add(registration);
+        }
+
+        private TService Decorate(TService service, ServiceContext context) =>
+            _decorators.Aggregate(service, (current, decorator) => decorator.Resolve(context, current));
+
+        private TService[] ResolveAll(ServiceContext context) =>
+            _parts.Select(part => Decorate(part.Resolve(context), context)).ToArray();
+
+        private TService ResolveCompositeOrLast(ServiceContext context) =>
+            _composite?.Resolve(context, _parts.Select(part => part.Resolve(context))) ??
+            _parts.Last().Resolve(context);
+
+        private void SetComposite(IServicePartRegistration registration)
+        {
+            if (_composite is not null) throw CompositeAlreadySetException.For<TService>();
+
+            _composite = registration;
+        }
 
         private interface IServicePartRegistration
         {
             IEnumerable<Type> Dependencies { get; }
             
             ServiceLifetime Lifetime { get; }
-            
-            object Resolve(ServiceContext context);
+
+            TService Resolve(ServiceContext context, params object[] dependencies) =>
+                Resolve(context, (IEnumerable<object>)dependencies);
+
+            TService Resolve(ServiceContext context, IEnumerable<object> dependencies);
         }
 
         private sealed class FactoryRegistration : IServicePartRegistration
@@ -265,7 +357,7 @@ internal sealed class ServiceRegistry : IServiceRegistry
             
             public ServiceLifetime Lifetime { get; }
 
-            public object Resolve(ServiceContext context) =>
+            public TService Resolve(ServiceContext context, IEnumerable<object> dependencies) =>
                 context.Track(Create(context), Lifetime);
 
             private TService Create(ServiceContext context) =>
@@ -279,10 +371,10 @@ internal sealed class ServiceRegistry : IServiceRegistry
                 internal FactoryServiceProvider(ServiceContext context) =>
                     _context = context;
 
-                public object? GetService(Type serviceType) =>
+                public object GetService(Type serviceType) =>
                     GetService(serviceType, default);
 
-                public object? GetService(Type serviceType, string? key) =>
+                public object GetService(Type serviceType, string? key) =>
                     _context.GetDependency(typeof(TService), serviceType, key);
             }
         }
@@ -307,18 +399,22 @@ internal sealed class ServiceRegistry : IServiceRegistry
             
             public ServiceLifetime Lifetime { get; }
 
-            public object Resolve(ServiceContext context) =>
-                context.Track(Create(context), Lifetime);
+            public TService Resolve(ServiceContext context, IEnumerable<object> dependencies) =>
+                context.Track(Create(context, dependencies), Lifetime);
 
-            private TService Create(ServiceContext context)
+            private TService Create(ServiceContext context, IEnumerable<object> dependencies)
             {
-                object[] dependencies = _dependencies
+                List<object> existingDependencies = dependencies.ToList();
+
+                object[] allDependencies = _dependencies
+                    .Except(existingDependencies.Select(dependency => dependency.GetType()))
                     .Select(type =>
                         context.GetDependency(typeof(TImplementation), type, default) ??
                         throw new UnresolvedDependencyException(typeof(TImplementation), type))
+                    .Concat(existingDependencies)
                     .ToArray();
 
-                return (TService)_constructor.Invoke(dependencies);
+                return (TService)_constructor.Invoke(allDependencies);
             }
         }
 
@@ -357,7 +453,7 @@ internal sealed class ServiceRegistry : IServiceRegistry
             public ServiceLifetime Lifetime =>
                 ServiceLifetime.Singleton;
 
-            public object Resolve(ServiceContext context) =>
+            public TService Resolve(ServiceContext context, IEnumerable<object> dependencies) =>
                 _instance;
         }
 
@@ -376,8 +472,8 @@ internal sealed class ServiceRegistry : IServiceRegistry
             public ServiceLifetime Lifetime =>
                 ServiceLifetime.Singleton;
 
-            public object Resolve(ServiceContext context) =>
-                _instance ??= (TService)_registration.Resolve(context);
+            public TService Resolve(ServiceContext context, IEnumerable<object> dependencies) =>
+                _instance ??= _registration.Resolve(context, dependencies);
         }
     }
 
@@ -425,13 +521,13 @@ internal sealed class ServiceRegistry : IServiceRegistry
 
 internal interface IServiceRegistration
 {
-    object Resolve(ServiceContext serviceContext);
+    object Resolve(ServiceContext context);
+
+    IEnumerable ResolveAll(ServiceContext context);
 }
 
 internal interface IServiceRegistration<in TService> : IServiceRegistration where TService : class
 {
-    void Decorate<TDecorator>() where TDecorator : TService;
-
     void Register(TService instance);
 
     void Register<TImplementation>(ServiceLifetime lifetime) where TImplementation : TService;
