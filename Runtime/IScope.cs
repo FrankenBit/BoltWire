@@ -5,8 +5,8 @@ using System.Diagnostics.CodeAnalysis;
 using System.Linq;
 using System.Reflection;
 using FrankenBit.BoltWire.Exceptions;
+using FrankenBit.BoltWire.Tools;
 using JetBrains.Annotations;
-using UnityEngine;
 
 namespace FrankenBit.BoltWire;
 
@@ -54,7 +54,7 @@ public sealed class ServiceCollection : IServiceCollection
 
 internal interface IServiceRegistry
 {
-    IServiceRegistration<TService> GetRegistration<TService>(string? key);
+    IServiceRegistration<TService> GetRegistration<TService>(string? key) where TService : class;
     
     bool TryGetRegistration(Type serviceType, string? key, [NotNullWhen(true)] out IServiceRegistration? registration);
 }
@@ -70,11 +70,6 @@ internal static class ExtensionsForIServiceRegistry
         (IServiceRegistration)typeof(IServiceRegistry).GetMethod(nameof(GetRegistration))!
             .MakeGenericMethod(serviceType)
             .Invoke(registry, new object?[] { key });
-
-    internal static object? GetService(this IServiceRegistry registry, Type serviceType, string? key) =>
-        registry.TryGetRegistration(serviceType, key, out IServiceRegistration? registration)
-            ? registration.Resolve(new ServiceContext(registry))
-            : default;
 
     internal static object? GetService(this IServiceRegistry registry, ServiceContext context, Type serviceType,
         string? key) =>
@@ -110,30 +105,45 @@ public interface IServiceProvider : System.IServiceProvider
 
 public sealed class ServiceProvider : IDisposable, IServiceProvider
 {
+    private readonly CompositeDisposable _disposables = new();
+    
     private readonly IServiceRegistry _registry;
 
     internal ServiceProvider(IServiceRegistry registry) =>
         _registry = registry;
 
     public void Dispose() =>
-        Debug.LogWarning("Dispose not yet implemented");
+        _disposables.Dispose();
 
     object? System.IServiceProvider.GetService(Type serviceType) =>
         GetService(serviceType);
 
     public object? GetService(Type serviceType, string? key = default) =>
-        _registry.GetService(serviceType, key);
+        _registry.GetService(new ServiceContext(_registry, _disposables.Add), serviceType, key);
 }
 
 internal sealed class ServiceContext
 {
+    private readonly Action<IDisposable> _disposableStore;
+
     private readonly IServiceRegistry _registry;
 
-    internal ServiceContext(IServiceRegistry registry) =>
+    internal ServiceContext(IServiceRegistry registry, Action<IDisposable> disposableStore)
+    {
         _registry = registry;
+        _disposableStore = disposableStore;
+    }
 
     public object? GetService(Type serviceType, string? key) =>
         _registry.GetService(this, serviceType, key);
+
+    public TService Track<TService>(TService service, ServiceLifetime lifetime) where TService : class
+    {
+        if (lifetime is ServiceLifetime.Scoped or ServiceLifetime.Singleton && service is IDisposable disposable)
+            _disposableStore.Invoke(disposable);
+        
+        return service;
+    }
 }
 
 internal sealed class ServiceRegistry : IServiceRegistry
@@ -145,7 +155,7 @@ internal sealed class ServiceRegistry : IServiceRegistry
     internal ServiceRegistry(IConstructorSelector constructorSelector) =>
         _constructorSelector = constructorSelector;
     
-    public IServiceRegistration<TService> GetRegistration<TService>(string? key)
+    public IServiceRegistration<TService> GetRegistration<TService>(string? key) where TService : class
     {
         ServiceGroupRegistration<TService> typedRegistrations =
             _registrations.TryGetValue(typeof(TService), out IServiceGroupRegistration? descriptors)
@@ -164,7 +174,7 @@ internal sealed class ServiceRegistry : IServiceRegistry
     }
 
     private ServiceGroupRegistration<TService> Store<TService>(
-        ServiceGroupRegistration<TService> serviceGroupRegistration)
+        ServiceGroupRegistration<TService> serviceGroupRegistration) where TService : class
     {
         _registrations[typeof(TService)] = serviceGroupRegistration;
         return serviceGroupRegistration;
@@ -177,7 +187,7 @@ internal sealed class ServiceRegistry : IServiceRegistry
         bool TryGetRegistration(string? key, [NotNullWhen(true)] out IServiceRegistration? registration);
     }
 
-    private sealed class ServiceRegistration<TService> : IServiceRegistration<TService>
+    private sealed class ServiceRegistration<TService> : IServiceRegistration<TService> where TService : class
     {
         private readonly IConstructorSelector _constructorSelector;
 
@@ -238,6 +248,9 @@ internal sealed class ServiceRegistry : IServiceRegistry
             public ServiceLifetime Lifetime { get; }
 
             public object Resolve(ServiceContext context) =>
+                context.Track(Create(context), Lifetime);
+
+            private TService Create(ServiceContext context) =>
                 _factory.Invoke(new FactoryServiceProvider(context)) ??
                 throw FactoryReturnedNullException.For<TService>();
 
@@ -276,7 +289,10 @@ internal sealed class ServiceRegistry : IServiceRegistry
             
             public ServiceLifetime Lifetime { get; }
 
-            public object Resolve(ServiceContext context)
+            public object Resolve(ServiceContext context) =>
+                context.Track(Create(context), Lifetime);
+
+            private TService Create(ServiceContext context)
             {
                 object[] dependencies = _dependencies
                     .Select(type =>
@@ -284,7 +300,7 @@ internal sealed class ServiceRegistry : IServiceRegistry
                         throw new UnresolvedDependencyException(typeof(TImplementation), type))
                     .ToArray();
 
-                return _constructor.Invoke(dependencies);
+                return (TService)_constructor.Invoke(dependencies);
             }
         }
 
@@ -315,7 +331,7 @@ internal sealed class ServiceRegistry : IServiceRegistry
                 ServiceLifetime.Singleton;
 
             public object Resolve(ServiceContext context) =>
-                _instance!;
+                _instance;
         }
 
         private sealed class SingletonCacheRegistration : IServicePartRegistration
@@ -334,11 +350,11 @@ internal sealed class ServiceRegistry : IServiceRegistry
                 ServiceLifetime.Singleton;
 
             public object Resolve(ServiceContext context) =>
-                _instance ??= (TService)_registration.Resolve(context)!;
+                _instance ??= (TService)_registration.Resolve(context);
         }
     }
 
-    private sealed class ServiceGroupRegistration<TService> : IServiceGroupRegistration
+    private sealed class ServiceGroupRegistration<TService> : IServiceGroupRegistration where TService : class
     {
         private readonly IConstructorSelector _constructorSelector;
 
@@ -385,7 +401,7 @@ internal interface IServiceRegistration
     object Resolve(ServiceContext serviceContext);
 }
 
-internal interface IServiceRegistration<in TService> : IServiceRegistration
+internal interface IServiceRegistration<in TService> : IServiceRegistration where TService : class
 {
     void Decorate<TDecorator>() where TDecorator : TService;
 
@@ -399,6 +415,7 @@ internal interface IServiceRegistration<in TService> : IServiceRegistration
 internal static class ExtensionsForIServiceRegistration
 {
     internal static void Register<TService>(this IServiceRegistration registration, TService instance)
+        where TService : class
     {
         Type registrationServiceType = registration.GetType().GetGenericArguments().Single();
         registration.GetType()
@@ -406,7 +423,8 @@ internal static class ExtensionsForIServiceRegistration
             .Invoke(registration, new object?[] { instance });
     }
 
-    internal static void Register<TService>(this IServiceRegistration registration, ServiceLifetime lifetime) =>
+    internal static void Register<TService>(this IServiceRegistration registration, ServiceLifetime lifetime)
+        where TService : class =>
         registration.GetType()
             .GetMethod(nameof(IServiceRegistration<TService>.Register), new[] { typeof(ServiceLifetime) })!
             .Invoke(registration, new object?[] { lifetime });
