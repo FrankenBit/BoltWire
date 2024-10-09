@@ -29,7 +29,7 @@ public static class ExtensionsForIServiceCollection
     {
         var descriptor = new ServiceDescriptor<TService, TImplementation>(lifetime, key);
         services.Add(descriptor);
-        return new PendingService<TService>(services);
+        return new PendingService<TService>(services, descriptor);
     }
 
     public static IServiceCollection Register(this IServiceCollection services,
@@ -49,7 +49,7 @@ public static class ExtensionsForIServiceCollection
     {
         var descriptor = new ComponentsInHierarchyDescriptor<TService, TImplementation>(key);
         services.Add(descriptor);
-        return new PendingService<TService>(services);
+        return new PendingService<TService>(services, descriptor);
     }
 
     public static IPendingImplementation<TService> RegisterScoped<TService>(
@@ -68,14 +68,17 @@ public static class ExtensionsForIServiceCollection
     private sealed class ComponentsInHierarchyDescriptor<TService, TImplementation> : IServiceDescriptor
         where TImplementation : TService where TService : class
     {
-        private readonly string? _key;
-
         internal ComponentsInHierarchyDescriptor(string? key) =>
-            _key = key;
+            Key = key;
+
+        public string? Key { get; }
+
+        public ServiceLifetime Lifetime =>
+            ServiceLifetime.Singleton;
 
         public void Configure(IServiceRegistry registry)
         {
-            IServiceRegistration<TService> registration = registry.GetRegistration<TService>(_key);
+            IServiceRegistration<TService> registration = registry.GetRegistration<TService>(Key);
 
             foreach (TImplementation component in Object
                          .FindObjectsByType<MonoBehaviour>(FindObjectsInactive.Include, FindObjectsSortMode.InstanceID)
@@ -86,14 +89,17 @@ public static class ExtensionsForIServiceCollection
     private sealed class ComponentsInHierarchyImplementationDescriptor<TService> : IImplementationServiceDescriptor
         where TService : class
     {
-        private readonly string? _key;
-
         internal ComponentsInHierarchyImplementationDescriptor(string? key) =>
-            _key = key;
+            Key = key;
+
+        public string? Key { get; }
+
+        public ServiceLifetime Lifetime =>
+            ServiceLifetime.Singleton;
 
         public void Configure(IServiceRegistry registry)
         {
-            IServiceRegistration<TService> registration = registry.GetRegistration<TService>(_key);
+            IServiceRegistration<TService> registration = registry.GetRegistration<TService>(Key);
 
             foreach (TService component in Object
                          .FindObjectsByType<MonoBehaviour>(FindObjectsInactive.Include, FindObjectsSortMode.InstanceID)
@@ -101,20 +107,23 @@ public static class ExtensionsForIServiceCollection
         }
 
         public IServiceDescriptor AsImplementedInterfaces() =>
-            new ComponentsInHierarchyAsImplementedInterfacesDescriptor<TService>(_key);
+            new ComponentsInHierarchyAsImplementedInterfacesDescriptor<TService>(Key);
     }
 
     private sealed class ComponentsInHierarchyAsImplementedInterfacesDescriptor<TService> : IServiceDescriptor
         where TService : class
     {
-        private readonly string? _key;
-
         internal ComponentsInHierarchyAsImplementedInterfacesDescriptor(string? key) =>
-            _key = key;
+            Key = key;
+
+        public string? Key { get; }
+
+        public ServiceLifetime Lifetime =>
+            ServiceLifetime.Singleton;
 
         public void Configure(IServiceRegistry registry)
         {
-            List<IServiceRegistration> registrations = registry.GetInterfaceRegistrations<TService>(_key).ToList();
+            List<IServiceRegistration> registrations = registry.GetInterfaceRegistrations<TService>(Key).ToList();
 
             foreach (TService component in Object
                          .FindObjectsByType<MonoBehaviour>(FindObjectsInactive.Include, FindObjectsSortMode.InstanceID)
@@ -127,47 +136,47 @@ public static class ExtensionsForIServiceCollection
     private sealed class ImplementationServiceDescriptor<TService> : IImplementationServiceDescriptor
         where TService : class
     {
-        private readonly string? _key;
-
-        private readonly ServiceLifetime _lifetime;
-
         internal ImplementationServiceDescriptor(ServiceLifetime lifetime, string? key)
         {
-            _lifetime = lifetime;
-            _key = key;
+            Lifetime = lifetime;
+            Key = key;
         }
 
         public void Configure(IServiceRegistry registry) =>
-            registry.GetRegistration<TService>(_key).Register<TService>(_lifetime);
+            registry.GetRegistration<TService>(Key).Register<TService>(Lifetime);
+
+        public string? Key { get; }
+
+        public ServiceLifetime Lifetime { get; }
 
         public IServiceDescriptor AsImplementedInterfaces() =>
-            new InterfaceServicesDescriptor<TService>(_lifetime, _key);
+            new InterfaceServicesDescriptor<TService>(Lifetime, Key);
     }
 
     private sealed class InterfaceServicesDescriptor<TService> : IServiceDescriptor where TService : class
     {
-        private readonly string? _key;
-
-        private readonly ServiceLifetime _lifetime;
-
         internal InterfaceServicesDescriptor(ServiceLifetime lifetime, string? key)
         {
-            _lifetime = lifetime;
-            _key = key;
+            Lifetime = lifetime;
+            Key = key;
         }
+
+        public string? Key { get; }
+
+        public ServiceLifetime Lifetime { get; }
 
         public void Configure(IServiceRegistry registry)
         {
             IServicePartRegistration<TService> partRegistration =
-                ImplementationRegistration.Create<TService, TService>(registry.ConstructorSelector, _lifetime)
+                ImplementationRegistration.Create<TService, TService>(registry.ConstructorSelector, Lifetime)
                     .CacheIfSingleton();
 
-            foreach (IServiceRegistration registration in registry.GetInterfaceRegistrations<TService>(_key))
+            foreach (IServiceRegistration registration in registry.GetInterfaceRegistrations<TService>(Key))
                 registration.Add(partRegistration);
         }
     }
 
-    private sealed class PendingImplementation<TService> : IPendingImplementation<TService>
+    private sealed class PendingImplementation<TService> : IPendingImplementation<TService> where TService : class
     {
         private readonly IServiceCollection _services;
 
@@ -184,7 +193,7 @@ public static class ExtensionsForIServiceCollection
             _services.Remove(_descriptor);
             IServiceDescriptor descriptor = _descriptor.AsImplementedInterfaces();
             _services.Add(descriptor);
-            return new PendingService<TService>(_services);
+            return new PendingService<TService>(_services, _descriptor);
         }
 
         public IEnumerator<IServiceDescriptor> GetEnumerator() =>
@@ -201,17 +210,34 @@ public static class ExtensionsForIServiceCollection
 
         public void Remove(IServiceDescriptor descriptor) =>
             _services.Remove(descriptor);
+
+        public string? Key =>
+            _descriptor.Key;
+
+        public ServiceLifetime Lifetime =>
+            _descriptor.Lifetime;
     }
 
-    private class PendingService<TService> : IPendingService<TService>
+    private class PendingService<TService> : IPendingService<TService> where TService : class
     {
+        private readonly IServiceDescriptor _descriptor;
+
         private readonly IServiceCollection _services;
 
-        internal PendingService(IServiceCollection services) =>
+        internal PendingService(IServiceCollection services, IServiceDescriptor descriptor)
+        {
             _services = services;
+            _descriptor = descriptor;
+        }
 
         public int Count =>
             _services.Count;
+
+        public string? Key =>
+            _descriptor.Key;
+
+        public ServiceLifetime Lifetime =>
+            _descriptor.Lifetime;
 
         public IEnumerator<IServiceDescriptor> GetEnumerator() =>
             _services.GetEnumerator();
@@ -229,17 +255,17 @@ public static class ExtensionsForIServiceCollection
     private sealed class ServiceDescriptor<TService, TImplementation> : IServiceDescriptor
         where TService : class where TImplementation : TService
     {
-        private readonly string? _key;
-
-        private readonly ServiceLifetime _lifetime;
-
         internal ServiceDescriptor(ServiceLifetime lifetime, string? key)
         {
-            _lifetime = lifetime;
-            _key = key;
+            Lifetime = lifetime;
+            Key = key;
         }
 
+        public string? Key { get; }
+
+        public ServiceLifetime Lifetime { get; }
+
         public void Configure(IServiceRegistry registry) =>
-            registry.GetRegistration<TService>(_key).Register<TImplementation>(_lifetime);
+            registry.GetRegistration<TService>(Key).Register<TImplementation>(Lifetime);
     }
 }

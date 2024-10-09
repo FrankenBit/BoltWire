@@ -26,6 +26,8 @@ public delegate TServices ServiceSetup<TServices>(TServices services) where TSer
 public interface IServiceDescriptor
 {
     internal void Configure(IServiceRegistry registry);
+    string? Key { get; }
+    ServiceLifetime Lifetime { get; }
 }
 
 public interface IServiceCollection : IReadOnlyCollection<IServiceDescriptor>
@@ -91,14 +93,21 @@ internal static class ExtensionsForIServiceRegistry
     }
 }
 
-public interface IPendingService<in TService> : IServiceCollection
+public interface IPendingService<in TService> : IServiceCollection where TService : class
 {
-    public IPendingService<TService> DecorateWith<TDecorator>() where TDecorator : TService =>
-        throw new NotImplementedException();
+    public IPendingService<TService> DecorateWith<TDecorator>() where TDecorator : TService
+    {
+        this.Register<TService, TDecorator>(Lifetime, Key);
+        return this;
+    }
+
+    string? Key { get; }
+
+    ServiceLifetime Lifetime { get; }
 }
 
 public interface IPendingImplementation<in TService> :
-    IPendingService<TService>
+    IPendingService<TService> where TService : class
 {
     public IPendingService<TService> AsImplementedInterfaces();
 }
