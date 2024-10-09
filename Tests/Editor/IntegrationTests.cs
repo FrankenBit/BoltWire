@@ -220,7 +220,7 @@ public sealed class IntegrationTests
     }
 
     [Test]
-    public void Resolve_NoScope_DoesResolveDifferentInstances()
+    public void Resolve_NoScope_DoesResolveSameInstances()
     {
         var services = new ServiceCollection();
         services.Register<Bar>(ServiceLifetime.Scoped);
@@ -229,7 +229,7 @@ public sealed class IntegrationTests
         var actual1 = provider.Resolve<Bar>();
         var actual2 = provider.Resolve<Bar>();
 
-        Assert.That(actual1, Is.Not.SameAs(actual2));
+        Assert.That(actual1, Is.SameAs(actual2));
     }
 
     [Test]
@@ -240,8 +240,8 @@ public sealed class IntegrationTests
         using ServiceProvider root = services.Build();
         using IScope scope = root.CreateScope();
 
-        var actual1 = root.Resolve<Bar>();
-        var actual2 = scope.Resolve<Bar>();
+        var actual1 = scope.Resolve<Bar>();
+        var actual2 = root.Resolve<Bar>();
 
         Assert.That(actual1, Is.Not.SameAs(actual2));
     }

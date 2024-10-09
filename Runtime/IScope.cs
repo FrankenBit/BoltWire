@@ -6,7 +6,6 @@ using System.Linq;
 using System.Reflection;
 using FrankenBit.BoltWire.Exceptions;
 using FrankenBit.BoltWire.Tools;
-using JetBrains.Annotations;
 
 namespace FrankenBit.BoltWire;
 
@@ -14,8 +13,7 @@ public interface IScope : IDisposable, IServiceProvider
 {
     IScope CreateScope();
 
-    [ContractAnnotation("=> true, instance: notnull; => false, instance: null")]
-    bool TryGetExistingInstance(Type serviceType, out object instance); 
+    bool TryGetService(Type serviceType, string? key, [NotNullWhen(true)] out object? instance);
 }
 
 public delegate TServices ServiceSetup<TServices>(TServices services) where TServices : IServiceCollection;
@@ -111,6 +109,9 @@ public interface IPendingImplementation<in TService> :
 
 public interface IServiceProvider : System.IServiceProvider
 {
+    object? System.IServiceProvider.GetService(Type serviceType) =>
+        GetService(serviceType, default);
+    
     object? GetService(Type serviceType, string? key);
 }
 
@@ -162,42 +163,155 @@ internal sealed class CollectionCapableServiceRegistry : IServiceRegistry
     }
 }
 
-public sealed class ServiceProvider : IDisposable, IServiceProvider
+internal interface IInstanceTracker
+{
+    void Track<TService>(TService service, ServiceLifetime lifetime, string? key = default)
+        where TService : class
+    {
+        if (service is IDisposable disposable) TrackDisposable(disposable, lifetime);
+        TrackInstance(service, lifetime, key);
+    }
+
+    void TrackDisposable(IDisposable service, ServiceLifetime lifetime);
+
+    void TrackInstance<TService>(TService service, ServiceLifetime lifetime, string? key)
+        where TService : class;
+}
+
+public sealed class ServiceProvider : IScope, IInstanceTracker
 {
     private readonly CompositeDisposable _disposables = new();
+
+    private readonly Dictionary<InstanceKey, object> _instances = new();
     
     private readonly IServiceRegistry _registry;
 
     internal ServiceProvider(IServiceRegistry registry) =>
         _registry = registry;
 
+    public IScope CreateScope() =>
+        new ServiceScope(this, _registry, this);
+
     public void Dispose() =>
         _disposables.Dispose();
 
-    object? System.IServiceProvider.GetService(Type serviceType) =>
-        GetService(serviceType);
-
     public object? GetService(Type serviceType, string? key = default) =>
-        _registry.TryGetRegistration(serviceType, key, out IServiceRegistration? registration)
-            ? registration.Resolve(new ServiceContext(_registry, _disposables.Add))
-            : default;
+        TryGetService(serviceType, key, out object? instance)
+            ? instance
+            : _registry.TryGetRegistration(serviceType, key, out IServiceRegistration? registration)
+                ? registration.Resolve(new ServiceContext(_registry, this, key))
+                : default;
+
+    void IInstanceTracker.TrackDisposable(IDisposable service, ServiceLifetime lifetime) =>
+        _disposables.Add(service);
+
+    void IInstanceTracker.TrackInstance<TService>(TService service, ServiceLifetime lifetime, string? key)
+    {
+        if (lifetime is ServiceLifetime.Singleton or ServiceLifetime.Scoped)
+            _instances[new InstanceKey(typeof(TService), key)] = service;
+    }
+
+    public bool TryGetService(Type serviceType, string? key, [NotNullWhen(true)] out object? instance) =>
+        _instances.TryGetValue(new InstanceKey(serviceType, key), out instance);
 }
+
+internal sealed class ServiceScope : IScope, IInstanceTracker
+{
+    private readonly CompositeDisposable _disposables = new();
+
+    private readonly Dictionary<InstanceKey, object> _instances = new();
+
+    private readonly IScope _parent;
+
+    private readonly IServiceRegistry _registry;
+
+    private readonly IInstanceTracker _root;
+
+    internal ServiceScope(IScope parent, IServiceRegistry registry, IInstanceTracker root)
+    {
+        _parent = parent;
+        _registry = registry;
+        _root = root;
+    }
+
+    public void Dispose() =>
+        _disposables.Dispose();
+
+    public object? GetService(Type serviceType, string? key) =>
+        TryGetService(serviceType, key, out object? instance)
+            ? instance
+            : _registry.TryGetRegistration(serviceType, key, out IServiceRegistration? registration)
+                ? registration.Resolve(new ServiceContext(_registry, this, key))
+                : default;
+
+    public IScope CreateScope() =>
+        new ServiceScope(this, _registry, _root);
+
+    void IInstanceTracker.TrackDisposable(IDisposable service, ServiceLifetime lifetime)
+    {
+        switch (lifetime)
+        {
+        case ServiceLifetime.Singleton:
+            _root.TrackDisposable(service, lifetime);
+            break;
+
+        case ServiceLifetime.Scoped:
+            _disposables.Add(service);
+            break;
+
+        case ServiceLifetime.Transient:
+            break;
+
+        default:
+            throw new ArgumentOutOfRangeException(nameof(lifetime), lifetime, null);
+        }
+    }
+
+    void IInstanceTracker.TrackInstance<TService>(TService service, ServiceLifetime lifetime, string? key)
+    {
+        switch (lifetime)
+        {
+        case ServiceLifetime.Singleton:
+            _root.TrackInstance(service, lifetime, key);
+            break;
+
+        case ServiceLifetime.Scoped:
+            _instances[new InstanceKey(typeof(TService), key)] = service;
+            break;
+
+        case ServiceLifetime.Transient:
+            break;
+
+        default:
+            throw new ArgumentOutOfRangeException(nameof(lifetime), lifetime, null);
+        }
+    }
+
+    public bool TryGetService(Type serviceType, string? key, [NotNullWhen(true)] out object? instance) =>
+        _instances.TryGetValue(new InstanceKey(serviceType, key), out instance) ||
+        _parent.TryGetService(serviceType, key, out instance);
+}
+
+internal sealed record InstanceKey(Type Type, string? Key);
 
 internal sealed class ServiceContext
 {
-    private readonly Action<IDisposable> _disposableStore;
+    private readonly IInstanceTracker _tracker;
 
     private readonly IServiceRegistry _registry;
     
     private readonly Stack<Type> _resolutionStack = new();
 
-    internal ServiceContext(IServiceRegistry registry, Action<IDisposable> disposableStore)
+    internal ServiceContext(IServiceRegistry registry, IInstanceTracker tracker, string? key)
     {
+        Key = key;
         _registry = registry;
-        _disposableStore = disposableStore;
+        _tracker = tracker;
     }
 
-    public object GetDependency(Type serviceType, Type dependencyType, string? key)
+    internal string? Key { get; }
+
+    internal object GetDependency(Type serviceType, Type dependencyType, string? key)
     {
         if (!_registry.TryGetRegistration(dependencyType, key, out IServiceRegistration? registration))
             throw new UnresolvedDependencyException(serviceType, dependencyType);
@@ -214,11 +328,9 @@ internal sealed class ServiceContext
         return result;
     }
 
-    public TService Track<TService>(TService service, ServiceLifetime lifetime) where TService : class
+    internal TService Track<TService>(TService service, ServiceLifetime lifetime) where TService : class
     {
-        if (lifetime is ServiceLifetime.Scoped or ServiceLifetime.Singleton && service is IDisposable disposable)
-            _disposableStore.Invoke(disposable);
-        
+        _tracker.Track(service, lifetime, Key);
         return service;
     }
 }
@@ -512,7 +624,7 @@ internal sealed class ImplementationRegistration<TService, TImplementation> : IS
         object[] allDependencies = _dependencies
             .Where(dependency => !suppliedTypes.Any(dependency.IsAssignableFrom))
             .Select(type =>
-                context.GetDependency(typeof(TImplementation), type, default) ??
+                context.GetDependency(typeof(TImplementation), type, context.Key) ??
                 throw new UnresolvedDependencyException(typeof(TImplementation), type))
             .Concat(dependencies.Where(dependency =>
                 _dependencies.Any(desired => desired.IsAssignableFrom(dependency.GetType()))))
