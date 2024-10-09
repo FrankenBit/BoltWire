@@ -18,9 +18,6 @@ public interface IScope : IDisposable, IServiceProvider
     bool TryGetExistingInstance(Type serviceType, out object instance); 
 }
 
-// TODO: if an implementation is registered as a singleton with multiple interfaces, the singleton instance is created multiple times
-// TODO: but only one instance should be created and shared between all interfaces
-
 public delegate TServices ServiceSetup<TServices>(TServices services) where TServices : IServiceCollection;
 
 public interface IServiceDescriptor

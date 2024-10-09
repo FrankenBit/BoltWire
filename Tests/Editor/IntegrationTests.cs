@@ -68,6 +68,34 @@ public sealed class IntegrationTests
 
         Assert.That(foo?.Disposed, Is.True);
     }
+    
+    /// <summary>
+    ///     Ensure that if an implementation is registered as a singleton with multiple interfaces,
+    ///     the singleton instance is created only once and is then shared between all interfaces when resolved.
+    /// </summary>
+    [Test]
+    public void Register_SingletonTwoInterfaces_SameInstance()
+    {
+        var services = new ServiceCollection();
+        services.Register<Bar>(ServiceLifetime.Scoped);
+        services.Register<IFooInterface, Foo>(ServiceLifetime.Singleton);
+        services.Register<ITestInterface, Foo>(ServiceLifetime.Singleton);
+        using ServiceProvider provider = services.Build();
+        
+        var foo = provider.Resolve<IFooInterface>();
+        var testInterface = provider.Resolve<ITestInterface>();
+
+        Assert.AreSame(foo, testInterface);
+    }
+
+    [Test]
+    public void Register_TransientHidingDisposable_DoesThrow()
+    {
+        var services = new ServiceCollection();
+        services.Register<ITestInterface, Foo>(ServiceLifetime.Transient);
+
+        Assert.That(() => services.Build(), Throws.InstanceOf<HiddenDisposableRegistrationException>());
+    }
 
     [Test]
     public void Resolve_Composite_DoesResolveComposite()
@@ -83,15 +111,6 @@ public sealed class IntegrationTests
         var actual = provider.Resolve<ITestInterface>();
 
         Assert.That(actual, Is.Not.Null);
-    }
-
-    [Test]
-    public void Register_TransientHidingDisposable_DoesThrow()
-    {
-        var services = new ServiceCollection();
-        services.Register<ITestInterface, Foo>(ServiceLifetime.Transient);
-
-        Assert.That(() => services.Build(), Throws.InstanceOf<HiddenDisposableRegistrationException>());
     }
 
     [Test]
@@ -305,6 +324,11 @@ public sealed class IntegrationTests
         Assert.That(actual.Count(), Is.EqualTo(2));
     }
 
+    private interface IFooInterface
+    {
+        Bar Bar { get; }
+    }
+    
     private interface ITestInterface
     {
         bool Disposed { get; }
@@ -346,20 +370,20 @@ public sealed class IntegrationTests
             $"Decorated {_decorated.GetText()}";
     }
     
-    private sealed class Foo : ITestInterface, IDisposable
+    private sealed class Foo : IFooInterface, ITestInterface, IDisposable
     {
-        private readonly Bar _bar;
-
         internal Foo(Bar bar) =>
-            _bar = bar;
+            Bar = bar;
 
+        public Bar Bar { get; }
+        
         public bool Disposed { get; private set; }
 
         public void Dispose() =>
             Disposed = true;
 
         public string GetText() =>
-            $"Foo{_bar.GetText()}";
+            $"Foo{Bar.GetText()}";
     }
 
     private sealed class TestComposite : ITestInterface
