@@ -9,6 +9,34 @@ namespace FrankenBit.BoltWire;
 public sealed class IntegrationTests
 {
     [Test]
+    public void Decorate_Explicit_DoesDecorate()
+    {
+        var services = new ServiceCollection();
+        services
+            .Register<ITestInterface, Bar>(ServiceLifetime.Scoped)
+            .DecorateWith<Decorator>();
+        using ServiceProvider provider = services.Build();
+
+        var actual = provider.Resolve<ITestInterface>();
+
+        Assert.That(actual?.GetText(), Is.EqualTo("Decorated Bar"));
+    }
+    
+    [Test]
+    public void Decorate_Implicit_DoesDecorate()
+    {
+        var services = new ServiceCollection();
+        services
+            .Register<ITestInterface, Bar>(ServiceLifetime.Scoped)
+            .Register<ITestInterface, Decorator>(ServiceLifetime.Scoped);
+        using ServiceProvider provider = services.Build();
+
+        var actual = provider.Resolve<ITestInterface>();
+
+        Assert.That(actual?.GetText(), Is.EqualTo("Decorated Bar"));
+    }
+    
+    [Test]
     public void Dispose_Scope_DoesDisposeScopedInstance()
     {
         var services = new ServiceCollection();
@@ -304,6 +332,20 @@ public sealed class IntegrationTests
             _parts.Length;
     }
 
+    private sealed class Decorator : ITestInterface
+    {
+        private readonly ITestInterface _decorated;
+
+        internal Decorator(ITestInterface decorated) =>
+            _decorated = decorated;
+
+        public bool Disposed =>
+            _decorated.Disposed;
+
+        public string GetText() =>
+            $"Decorated {_decorated.GetText()}";
+    }
+    
     private sealed class Foo : ITestInterface, IDisposable
     {
         private readonly Bar _bar;
