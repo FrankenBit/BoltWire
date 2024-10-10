@@ -1,8 +1,12 @@
-﻿namespace FrankenBit.BoltWire;
+﻿using System.Diagnostics.CodeAnalysis;
+
+namespace FrankenBit.BoltWire;
 
 public interface IPendingService<in TService> : IServiceCollection where TService : class
 {
-    public IPendingService<TService> DecorateWith<TDecorator>() where TDecorator : TService
+    public IPendingService<TService> DecorateWith<
+        [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.NonPublicConstructors)] TDecorator>()
+        where TDecorator : TService
     {
         this.Register<TService, TDecorator>(Lifetime, Key);
         return this;

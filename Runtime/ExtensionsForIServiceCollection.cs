@@ -1,5 +1,6 @@
 ﻿using System.Collections;
 using System.Collections.Generic;
+using System.Diagnostics.CodeAnalysis;
 using System.Linq;
 using UnityEngine;
 
@@ -16,7 +17,9 @@ public static class ExtensionsForIServiceCollection
         return new ServiceProvider(new CollectionCapableServiceRegistry(registry));
     }
 
-    public static IPendingImplementation<TService> Register<TService>(this IServiceCollection services,
+    public static IPendingImplementation<TService> Register<
+        [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.NonPublicConstructors)] TService>(
+        this IServiceCollection services,
         ServiceLifetime lifetime, string? key = default) where TService : class
     {
         var descriptor = new ImplementationServiceDescriptor<TService>(lifetime, key);
@@ -44,7 +47,8 @@ public static class ExtensionsForIServiceCollection
         return new PendingImplementation<TService>(services, descriptor);
     }
 
-    public static IPendingService<TService> RegisterComponentsInHierarchy<TService, TImplementation>(
+    public static IPendingService<TService> RegisterComponentsInHierarchy<TService,
+        [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.NonPublicConstructors)] TImplementation>(
         this IServiceCollection services, string? key = default) where TImplementation : TService where TService : class
     {
         var descriptor = new ComponentsInHierarchyDescriptor<TService, TImplementation>(key);
@@ -52,11 +56,13 @@ public static class ExtensionsForIServiceCollection
         return new PendingService<TService>(services, descriptor);
     }
 
-    public static IPendingImplementation<TService> RegisterScoped<TService>(
+    public static IPendingImplementation<TService> RegisterScoped<
+        [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.NonPublicConstructors)] TService>(
         this IServiceCollection services) where TService : class =>
         services.Register<TService>(ServiceLifetime.Scoped);
 
-    public static IPendingService<TService> RegisterScoped<TService, TImplementation>(
+    public static IPendingService<TService> RegisterScoped<TService,
+        [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.NonPublicConstructors)] TImplementation>(
         this IServiceCollection services) where TImplementation : TService where TService : class =>
         Register<TService, TImplementation>(services, ServiceLifetime.Scoped);
 
