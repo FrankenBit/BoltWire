@@ -169,7 +169,7 @@ public static class ExtensionsForIServiceCollection
         {
             IServicePartRegistration<TService> partRegistration =
                 ImplementationRegistration.Create<TService, TService>(registry.ConstructorSelector, Lifetime)
-                    .CacheIfSingleton();
+                    .CacheIfNeeded();
 
             foreach (IServiceRegistration registration in registry.GetInterfaceRegistrations<TService>(Key))
                 registration.Add(partRegistration);

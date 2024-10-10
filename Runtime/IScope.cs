@@ -165,8 +165,7 @@ internal sealed class CollectionCapableServiceRegistry : IServiceRegistry
 
 internal interface IInstanceTracker
 {
-    void Track<TService>(TService service, ServiceLifetime lifetime, string? key = default)
-        where TService : class
+    void Track(object service, ServiceLifetime lifetime, string? key = default)
     {
         if (service is IDisposable disposable) TrackDisposable(disposable, lifetime);
         TrackInstance(service, lifetime, key);
@@ -174,8 +173,9 @@ internal interface IInstanceTracker
 
     void TrackDisposable(IDisposable service, ServiceLifetime lifetime);
 
-    void TrackInstance<TService>(TService service, ServiceLifetime lifetime, string? key)
-        where TService : class;
+    void TrackInstance(object service, ServiceLifetime lifetime, string? key);
+    
+    bool TryGetService(Type serviceType, string? key, [NotNullWhen(true)] out object? instance);
 }
 
 public sealed class ServiceProvider : IScope, IInstanceTracker
@@ -205,10 +205,10 @@ public sealed class ServiceProvider : IScope, IInstanceTracker
     void IInstanceTracker.TrackDisposable(IDisposable service, ServiceLifetime lifetime) =>
         _disposables.Add(service);
 
-    void IInstanceTracker.TrackInstance<TService>(TService service, ServiceLifetime lifetime, string? key)
+    void IInstanceTracker.TrackInstance(object service, ServiceLifetime lifetime, string? key)
     {
         if (lifetime is ServiceLifetime.Singleton or ServiceLifetime.Scoped)
-            _instances[new InstanceKey(typeof(TService), key)] = service;
+            _instances[new InstanceKey(service.GetType(), key)] = service;
     }
 
     public bool TryGetService(Type serviceType, string? key, [NotNullWhen(true)] out object? instance) =>
@@ -267,7 +267,7 @@ internal sealed class ServiceScope : IScope, IInstanceTracker
         }
     }
 
-    void IInstanceTracker.TrackInstance<TService>(TService service, ServiceLifetime lifetime, string? key)
+    void IInstanceTracker.TrackInstance(object service, ServiceLifetime lifetime, string? key)
     {
         switch (lifetime)
         {
@@ -276,7 +276,7 @@ internal sealed class ServiceScope : IScope, IInstanceTracker
             break;
 
         case ServiceLifetime.Scoped:
-            _instances[new InstanceKey(typeof(TService), key)] = service;
+            _instances[new InstanceKey(service.GetType(), key)] = service;
             break;
 
         case ServiceLifetime.Transient:
@@ -333,6 +333,9 @@ internal sealed class ServiceContext
         _tracker.Track(service, lifetime, Key);
         return service;
     }
+
+    public bool TryGetInstance(Type implementationType, [NotNullWhen(true)] out object? instance) =>
+        _tracker.TryGetService(implementationType, Key, out instance);
 }
 
 internal static class SupportedCollectionTypes
@@ -410,7 +413,7 @@ internal sealed class ServiceRegistry : IServiceRegistry
             _constructorSelector = constructorSelector;
 
         public void Add(IServicePartRegistration<TService> registration) =>
-            AddCached(registration.CacheIfSingleton());
+            AddCached(registration.CacheIfNeeded());
 
         private void AddCached(IServicePartRegistration<TService> registration)
         {
@@ -513,6 +516,9 @@ internal sealed class FactoryRegistration<TService> : IServicePartRegistration<T
     public IEnumerable<Type> Dependencies =>
         Array.Empty<Type>();
 
+    public Type ImplementationType =>
+        typeof(TService);
+
     public bool IsCaching =>
         false;
 
@@ -550,6 +556,9 @@ internal sealed class SingletonRegistration<TService> : IServicePartRegistration
     public IEnumerable<Type> Dependencies =>
         Array.Empty<Type>();
 
+    public Type ImplementationType=> 
+        typeof(TService);
+
     public bool IsCaching =>
         true;
 
@@ -562,33 +571,70 @@ internal sealed class SingletonRegistration<TService> : IServicePartRegistration
 
 internal static class ExtensionsForIServicePartRegistration
 {
-    internal static IServicePartRegistration<TService> CacheIfSingleton<TService>(
+    internal static IServicePartRegistration<TService> CacheIfNeeded<TService>(
         this IServicePartRegistration<TService> registration) where TService : class =>
-        registration is { Lifetime: ServiceLifetime.Singleton, IsCaching: false }
-            ? new SingletonCacheRegistration<TService>(registration)
-            : registration;
+        registration.IsCaching ? registration : Cache(registration);
+
+    private static IServicePartRegistration<TService> Cache<TService>(IServicePartRegistration<TService> registration)
+        where TService : class =>
+        registration.Lifetime switch
+        {
+            ServiceLifetime.Singleton => new SingletonCacheRegistration<TService>(registration),
+            ServiceLifetime.Scoped => new ScopedCacheRegistration<TService>(registration),
+            _ => registration
+        };
 }
 
-internal sealed class SingletonCacheRegistration<TService> : IServicePartRegistration<TService> where TService : class
+internal abstract class CacheRegistrationBase<TService> : IServicePartRegistration<TService> where TService : class
 {
     private readonly IServicePartRegistration<TService> _registration;
 
-    private TService? _instance;
-
-    internal SingletonCacheRegistration(IServicePartRegistration<TService> registration) =>
+    protected CacheRegistrationBase(IServicePartRegistration<TService> registration) =>
         _registration = registration;
 
-    public IEnumerable<Type> Dependencies =>
-        _instance is null ? _registration.Dependencies : Array.Empty<Type>();
+    public virtual IEnumerable<Type> Dependencies =>
+        _registration.Dependencies;
+
+    public Type ImplementationType =>
+        _registration.ImplementationType;
 
     public bool IsCaching =>
         true;
 
     public ServiceLifetime Lifetime =>
-        ServiceLifetime.Singleton;
+        _registration.Lifetime;
 
     public TService Resolve(ServiceContext context, IReadOnlyCollection<object> dependencies) =>
-        _instance ??= _registration.Resolve(context, dependencies);
+        GetCachedInstance(context) ?? _registration.Resolve(context, dependencies);
+    
+    protected virtual TService? GetCachedInstance(ServiceContext context) =>
+        context.TryGetInstance(ImplementationType, out object? instance)
+            ? (TService)instance
+            : default; 
+}
+
+internal sealed class ScopedCacheRegistration<TService> : CacheRegistrationBase<TService> where TService : class
+{
+    internal ScopedCacheRegistration(IServicePartRegistration<TService> registration)
+        : base(registration)
+    {
+    }
+}
+
+internal sealed class SingletonCacheRegistration<TService> : CacheRegistrationBase<TService> where TService : class
+{
+    private TService? _instance;
+
+    internal SingletonCacheRegistration(IServicePartRegistration<TService> registration)
+        : base(registration)
+    {
+    }
+
+    public override IEnumerable<Type> Dependencies =>
+        _instance is null ? base.Dependencies : Array.Empty<Type>();
+
+    protected override TService? GetCachedInstance(ServiceContext context) =>
+        _instance ?? base.GetCachedInstance(context);
 }
 
 internal sealed class ImplementationRegistration<TService, TImplementation> : IServicePartRegistration<TService>
@@ -608,6 +654,9 @@ internal sealed class ImplementationRegistration<TService, TImplementation> : IS
 
     public IEnumerable<Type> Dependencies =>
         _dependencies;
+
+    public Type ImplementationType =>
+        typeof(TImplementation);
 
     public bool IsCaching =>
         false;
@@ -661,6 +710,8 @@ internal static class ImplementationRegistration
 internal interface IServicePartRegistration
 {
     IEnumerable<Type> Dependencies { get; }
+    
+    Type ImplementationType { get; }
     
     bool IsCaching { get; }
 
