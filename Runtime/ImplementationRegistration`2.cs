@@ -13,11 +13,11 @@ internal sealed class ImplementationRegistration<TService, TImplementation> : IS
 
     private readonly Type[] _dependencies;
 
-    internal ImplementationRegistration(ConstructorInfo constructor, Type[] dependencies,
+    internal ImplementationRegistration(ConstructorInfo constructor, IEnumerable<Type> dependencies,
         ServiceLifetime lifetime)
     {
         _constructor = constructor;
-        _dependencies = dependencies;
+        _dependencies = dependencies.ToArray();
         Lifetime = lifetime;
     }
 
@@ -37,17 +37,22 @@ internal sealed class ImplementationRegistration<TService, TImplementation> : IS
 
     private TService Create(ServiceContext context, IReadOnlyCollection<object> dependencies)
     {
-        List<Type> suppliedTypes = dependencies.Select(dependency => dependency.GetType()).ToList();
+        Dictionary<Type, object> suppliedDependencies = dependencies.ToDictionary(instance => instance.GetType());
 
-        object[] allDependencies = _dependencies
-            .Where(dependency => !suppliedTypes.Any(dependency.IsAssignableFrom))
-            .Select(type =>
-                context.GetDependency(typeof(TImplementation), type, context.Key) ??
-                throw new UnresolvedDependencyException(typeof(TImplementation), type))
-            .Concat(dependencies.Where(dependency =>
-                _dependencies.Any(desired => desired.IsAssignableFrom(dependency.GetType()))))
-            .ToArray();
+        return (TService)_constructor.Invoke(_dependencies.Select(ResolveDependency).ToArray());
 
-        return (TService)_constructor.Invoke(allDependencies);
+        Type? FindBestSuitableType(Type type) =>
+            suppliedDependencies.ContainsKey(type)
+                ? type
+                : suppliedDependencies.Keys.FirstOrDefault(type.IsAssignableFrom);
+
+        object ResolveDependency1(Type dependencyType, Type? bestSuppliedType) =>
+            bestSuppliedType is not null
+                ? suppliedDependencies[bestSuppliedType]
+                : context.GetDependency(typeof(TImplementation), dependencyType, context.Key) ??
+                  throw new UnresolvedDependencyException(typeof(TImplementation), dependencyType);
+        
+        object ResolveDependency(Type dependencyType) =>
+            ResolveDependency1(dependencyType, FindBestSuitableType(dependencyType));
     }
 }

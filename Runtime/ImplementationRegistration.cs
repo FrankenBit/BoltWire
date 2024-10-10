@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
 using FrankenBit.BoltWire.Exceptions;
@@ -16,9 +17,8 @@ internal static class ImplementationRegistration
             throw HiddenDisposableRegistrationException.Of<TService, TImplementation>();
 
         ConstructorInfo constructor = constructorSelector.SelectConstructor<TImplementation>();
-        Type[] dependencies = constructor.GetParameters()
-            .Select(parameter => parameter.ParameterType)
-            .ToArray();
+        IEnumerable<Type> dependencies = constructor.GetParameters()
+            .Select(parameter => parameter.ParameterType);
         return new ImplementationRegistration<TService, TImplementation>(constructor, dependencies, lifetime);
     }
 
