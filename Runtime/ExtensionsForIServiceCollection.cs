@@ -49,7 +49,9 @@ public static class ExtensionsForIServiceCollection
 
     public static IPendingService<TService> RegisterComponentsInHierarchy<TService,
         [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.NonPublicConstructors)] TImplementation>(
-        this IServiceCollection services, string? key = default) where TImplementation : TService where TService : class
+        this IServiceCollection services, string? key = default)
+        where TService : class
+        where TImplementation : MonoBehaviour, TService
     {
         var descriptor = new ComponentsInHierarchyDescriptor<TService, TImplementation>(key);
         services.Add(descriptor);
