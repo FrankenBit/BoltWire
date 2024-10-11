@@ -226,7 +226,7 @@ public static class ExtensionsForIServiceCollection
             _descriptor.Lifetime;
     }
 
-    private class PendingService<TService> : IPendingService<TService> where TService : class
+    private sealed class PendingService<TService> : IPendingService<TService> where TService : class
     {
         private readonly IServiceDescriptor _descriptor;
 

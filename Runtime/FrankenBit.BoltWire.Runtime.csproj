@@ -1,0 +1,33 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>netstandard2.1</TargetFramework>
+    <RootNamespace>FrankenBit.BoltWire</RootNamespace>
+
+    <Nullable>enable</Nullable>
+    <LangVersion>10.0</LangVersion>
+
+    <UnityVersion>6000.0.22f1</UnityVersion>
+    <UnityPath>C:\Program Files\Unity\Hub\Editor\$(UnityVersion)\Editor\Data\PlaybackEngines\windowsstandalonesupport\Variations\mono\Managed</UnityPath>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|AnyCPU'">
+    <DefineConstants>$(DefineConstants);CODE_ANALYSIS</DefineConstants>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Reference Include="UnityEngine">
+      <HintPath>$(UnityPath)\UnityEngine.dll</HintPath>
+    </Reference>
+    <Reference Include="UnityEngine.CoreModule">
+      <HintPath>$(UnityPath)\UnityEngine.CoreModule.dll</HintPath>
+    </Reference>
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Update="**\*.meta">
+      <Visible>false</Visible>
+    </None>
+  </ItemGroup>
+
+</Project>

@@ -1,0 +1,10 @@
+/Build
+/Build.meta
+
+/.vs/
+
+bin/
+obj/
+
+/.NDependOut/**/*.xml
+/.NDependOut/**/*.zip

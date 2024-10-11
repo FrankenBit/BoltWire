@@ -85,7 +85,7 @@ public sealed class IntegrationTests
         var foo = provider.Resolve<IFooInterface>();
         var testInterface = provider.Resolve<ITestInterface>();
 
-        Assert.AreSame(foo, testInterface);
+        Assert.That(foo, Is.SameAs(testInterface));
     }
 
     [Test]
