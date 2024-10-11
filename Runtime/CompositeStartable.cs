@@ -1,7 +1,7 @@
 ﻿using System.Collections.Generic;
 using System.Linq;
 
-namespace FrankenBit.BoltWire.Tools;
+namespace FrankenBit.BoltWire;
 
 /// <summary>
 ///     Represents a collection of <see cref="IStartable" /> items that can be started.

@@ -1,8 +1,7 @@
 ﻿using System;
-using FrankenBit.BoltWire.Tools;
 using UnityEngine;
 
-namespace FrankenBit.BoltWire.Unity3D;
+namespace FrankenBit.BoltWire;
 
 public abstract class LifetimeScope : MonoBehaviour, IDisposable
 {
