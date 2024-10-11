@@ -11,7 +11,7 @@ internal sealed class ServiceContext
 
     private readonly IServiceRegistry _registry;
     
-    private readonly Stack<Type> _resolutionStack = new();
+    private readonly Stack<Type> _resolutionItems = new();
 
     internal ServiceContext(IServiceRegistry registry, IInstanceTracker tracker, string? key)
     {
@@ -27,15 +27,15 @@ internal sealed class ServiceContext
         if (!_registry.TryGetRegistration(dependencyType, key, out IServiceRegistration? registration))
             throw new UnresolvedDependencyException(serviceType, dependencyType);
 
-        if (_resolutionStack.TryPeek(out Type currentServiceType) && currentServiceType == dependencyType)
+        if (_resolutionItems.TryPeek(out Type currentServiceType) && currentServiceType == dependencyType)
             return registration.Resolve(this);
         
-        if (_resolutionStack.Contains(dependencyType))
+        if (_resolutionItems.Contains(dependencyType))
             throw new CircularDependencyException(serviceType, dependencyType);
         
-        _resolutionStack.Push(dependencyType);
+        _resolutionItems.Push(dependencyType);
         object result = registration.Resolve(this);
-        _resolutionStack.Pop();
+        _resolutionItems.Pop();
         return result;
     }
 
@@ -45,6 +45,6 @@ internal sealed class ServiceContext
         return service;
     }
 
-    public bool TryGetInstance(Type implementationType, [NotNullWhen(true)] out object? instance) =>
+    internal bool TryGetInstance(Type implementationType, [NotNullWhen(true)] out object? instance) =>
         _tracker.TryGetService(implementationType, Key, out instance);
 }
