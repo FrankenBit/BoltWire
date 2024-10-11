@@ -1,5 +1,5 @@
 ﻿using System;
-using JetBrains.Annotations;
+using System.Diagnostics.CodeAnalysis;
 
 namespace FrankenBit.BoltWire;
 
@@ -7,6 +7,5 @@ public interface IScope : IDisposable, IServiceProvider
 {
     IScope CreateScope();
 
-    [ContractAnnotation("=> true, instance: notnull; => false, instance: null")]
-    bool TryGetExistingInstance(Type serviceType, out object instance); 
+    bool TryGetService(Type serviceType, string? key, [NotNullWhen(true)] out object? instance);
 }

@@ -4,25 +4,45 @@ using FrankenBit.BoltWire.Exceptions;
 
 namespace FrankenBit.BoltWire;
 
-internal class FactoryRegistration<TImplementation> : IRegistration
+internal sealed class FactoryRegistration<TService> : IServicePartRegistration<TService> where TService : class
 {
-    private readonly Func<IServiceProvider, TImplementation> _factory;
+    private readonly Func<IServiceProvider, TService> _factory;
 
-    private readonly IServiceProvider _resolver;
-
-    public FactoryRegistration(IServiceProvider resolver,
-        Func<IServiceProvider, TImplementation> factory, ServiceLifetime lifetime)
+    internal FactoryRegistration(Func<IServiceProvider, TService> factory, ServiceLifetime lifetime)
     {
-        _resolver = resolver ?? throw new ArgumentNullException(nameof(resolver));
-        _factory = factory ?? throw new ArgumentNullException(nameof(factory));
+        _factory = factory;
         Lifetime = lifetime;
     }
 
     public IEnumerable<Type> Dependencies =>
         Array.Empty<Type>();
-        
+
+    public Type ImplementationType =>
+        typeof(TService);
+
+    public bool IsCaching =>
+        false;
+
     public ServiceLifetime Lifetime { get; }
 
-    public object GetInstance(IDictionary<Type, object> parameters) =>
-        _factory.Invoke(_resolver) ?? throw FactoryReturnedNullException.For<TImplementation>();
+    public TService Resolve(ServiceContext context, IReadOnlyCollection<object> dependencies) =>
+        context.Track(Create(context), Lifetime);
+
+    private TService Create(ServiceContext context) =>
+        _factory.Invoke(new FactoryServiceProvider(context)) ??
+        throw FactoryReturnedNullException.For<TService>();
+
+    private sealed class FactoryServiceProvider : IServiceProvider
+    {
+        private readonly ServiceContext _context;
+
+        internal FactoryServiceProvider(ServiceContext context) =>
+            _context = context;
+
+        public object GetService(Type serviceType) =>
+            GetService(serviceType, default);
+
+        public object GetService(Type serviceType, string? key) =>
+            _context.GetDependency(typeof(TService), serviceType, key);
+    }
 }

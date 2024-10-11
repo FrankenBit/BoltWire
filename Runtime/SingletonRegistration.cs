@@ -3,21 +3,25 @@ using System.Collections.Generic;
 
 namespace FrankenBit.BoltWire;
 
-internal sealed class SingletonRegistration<TInstance> : IRegistration
+internal sealed class SingletonRegistration<TService> : IServicePartRegistration<TService> where TService : class
 {
-    private readonly TInstance _instance;
+    private readonly TService _instance;
 
-    internal SingletonRegistration(TInstance instance)
-    {
-        _instance = instance ?? throw new ArgumentNullException(nameof(instance));
-    }
+    internal SingletonRegistration(TService instance) =>
+        _instance = instance;
 
     public IEnumerable<Type> Dependencies =>
         Array.Empty<Type>();
 
+    public Type ImplementationType=> 
+        typeof(TService);
+
+    public bool IsCaching =>
+        true;
+
     public ServiceLifetime Lifetime =>
         ServiceLifetime.Singleton;
 
-    public object GetInstance(IDictionary<Type, object> parameters) =>
-        _instance!;
+    public TService Resolve(ServiceContext context, IReadOnlyCollection<object> dependencies) =>
+        _instance;
 }

@@ -1,41 +1,20 @@
 ﻿using System;
 using System.Collections.Generic;
-using JetBrains.Annotations;
 
 namespace FrankenBit.BoltWire;
 
-internal sealed class SingletonCacheRegistration : IDisposable, IRegistration
+internal sealed class SingletonCacheRegistration<TService> : CacheRegistrationBase<TService> where TService : class
 {
-    private readonly IRegistration _registration;
+    private TService? _instance;
 
-    private IDisposable? _disposable;
-        
-    private object? _instance;
-
-    internal SingletonCacheRegistration(IRegistration registration) =>
-        _registration = registration ?? throw new ArgumentNullException(nameof(registration));
-
-    public IEnumerable<Type> Dependencies =>
-        _instance is null ? _registration.Dependencies : Array.Empty<Type>();
-
-    public ServiceLifetime Lifetime =>
-        ServiceLifetime.Singleton;
-
-    public void Dispose()
+    internal SingletonCacheRegistration(IServicePartRegistration<TService> registration)
+        : base(registration)
     {
-        _disposable?.Dispose();
-        _instance = _disposable = default;
     }
 
-    public object GetInstance(IDictionary<Type, object> parameters) =>
-        _instance ??= CreateInstance(parameters);
+    public override IEnumerable<Type> Dependencies =>
+        _instance is null ? base.Dependencies : Array.Empty<Type>();
 
-    private object CreateInstance(IDictionary<Type, object> parameters) =>
-        StoreIfDisposable(_registration.GetInstance(parameters));
-
-    private object StoreIfDisposable(object instance)
-    {
-        _disposable = instance as IDisposable;
-        return instance;
-    }
+    protected override TService? GetCachedInstance(ServiceContext context) =>
+        _instance ??= base.GetCachedInstance(context);
 }
