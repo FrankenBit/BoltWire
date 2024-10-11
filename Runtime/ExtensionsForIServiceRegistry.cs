@@ -26,7 +26,7 @@ internal static class ExtensionsForIServiceRegistry
     private static IEnumerable<IServiceRegistration> GetRegistrations<TService>(this IServiceRegistry registry,
         string? key, IReadOnlyCollection<Type> interfaceTypes)
     {
-        if (interfaceTypes.Count == 0) throw ServiceDoesNotImplementAnyInterfaces.For<TService>();
+        if (interfaceTypes.Count == 0) throw ServiceDoesNotImplementAnyInterfacesException.For<TService>();
 
         return interfaceTypes.Select(interfaceType => registry.GetRegistration(interfaceType, key));
     }
