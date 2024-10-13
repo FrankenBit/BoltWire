@@ -6,6 +6,9 @@
 bin/
 obj/
 
+StrykerOutput/
+StrykerOutput.meta
+
 /.NDependOut/**/*.xml
 /.NDependOut/**/*.zip
 
