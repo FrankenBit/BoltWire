@@ -15,6 +15,6 @@ internal sealed class SingletonCacheRegistration<TService> : CacheRegistrationBa
     public override IEnumerable<Type> Dependencies =>
         _instance is null ? base.Dependencies : Array.Empty<Type>();
 
-    protected override TService? GetCachedInstance(ServiceContext context) =>
+    protected override TService? GetCachedInstance(IServiceContext context) =>
         _instance ??= base.GetCachedInstance(context);
 }

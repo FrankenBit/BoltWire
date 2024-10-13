@@ -1,3 +1,3 @@
 ﻿using System.Runtime.CompilerServices;
 
-[assembly: InternalsVisibleTo("FrankenBit.BoltWire.Tests")]
+[assembly: InternalsVisibleTo("FrankenBit.BoltWire.Tests.Editor")]

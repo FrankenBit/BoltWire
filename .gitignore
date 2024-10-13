@@ -8,3 +8,5 @@ obj/
 
 /.NDependOut/**/*.xml
 /.NDependOut/**/*.zip
+
+*.user

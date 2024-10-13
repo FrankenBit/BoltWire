@@ -22,6 +22,6 @@ internal sealed class SingletonRegistration<TService> : IServicePartRegistration
     public ServiceLifetime Lifetime =>
         ServiceLifetime.Singleton;
 
-    public TService Resolve(ServiceContext context, IReadOnlyCollection<object> dependencies) =>
+    public TService Resolve(IServiceContext context, IReadOnlyCollection<object> dependencies) =>
         _instance;
 }

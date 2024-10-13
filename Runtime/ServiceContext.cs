@@ -5,7 +5,7 @@ using FrankenBit.BoltWire.Exceptions;
 
 namespace FrankenBit.BoltWire;
 
-internal sealed class ServiceContext
+internal sealed class ServiceContext : IServiceContext
 {
     private readonly IInstanceTracker _tracker;
 
@@ -20,9 +20,9 @@ internal sealed class ServiceContext
         _tracker = tracker;
     }
 
-    internal string? Key { get; }
+    public string? Key { get; }
 
-    internal object GetDependency(Type serviceType, Type dependencyType, string? key)
+    public object GetDependency(Type serviceType, Type dependencyType, string? key)
     {
         if (!_registry.TryGetRegistration(dependencyType, key, out IServiceRegistration? registration))
             throw new UnresolvedDependencyException(serviceType, dependencyType);
@@ -39,12 +39,12 @@ internal sealed class ServiceContext
         return result;
     }
 
-    internal TService Track<TService>(TService service, ServiceLifetime lifetime) where TService : class
+    public TService Track<TService>(TService service, ServiceLifetime lifetime) where TService : class
     {
         _tracker.Track(service, lifetime, Key);
         return service;
     }
 
-    internal bool TryGetInstance(Type implementationType, [NotNullWhen(true)] out object? instance) =>
+    public bool TryGetInstance(Type implementationType, [NotNullWhen(true)] out object? instance) =>
         _tracker.TryGetService(implementationType, Key, out instance);
 }
