@@ -22,10 +22,10 @@ internal abstract class CacheRegistrationBase<TService> : IServicePartRegistrati
     public ServiceLifetime Lifetime =>
         _registration.Lifetime;
 
-    public TService Resolve(ServiceContext context, IReadOnlyCollection<object> dependencies) =>
+    public TService Resolve(IServiceContext context, IReadOnlyCollection<object> dependencies) =>
         GetCachedInstance(context) ?? _registration.Resolve(context, dependencies);
     
-    protected virtual TService? GetCachedInstance(ServiceContext context) =>
+    protected virtual TService? GetCachedInstance(IServiceContext context) =>
         context.TryGetInstance(ImplementationType, out object? instance)
             ? (TService)instance
             : default; 

@@ -1,6 +1,7 @@
 ﻿<wpf:ResourceDictionary xml:space="preserve" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" xmlns:s="clr-namespace:System;assembly=mscorlib" xmlns:ss="urn:shemas-jetbrains-com:settings-storage-xaml" xmlns:wpf="http://schemas.microsoft.com/winfx/2006/xaml/presentation">
+	<s:String x:Key="/Default/Environment/Highlighting/HighlightingSourceSnapshotLocation/@EntryValue">C:\Users\a\AppData\Local\Temp\JetBrains\ReSharperPlatformVs17\vAny_c5e992c4\CoverageData\_BoltWire.-396602164\Snapshot\snapshot.utdcvr</s:String>
 	<s:String x:Key="/Default/Environment/UnitTesting/UnitTestSessionStore/Sessions/=840d1baa_002Daf23_002D4864_002D8adb_002D763e2154841c/@EntryIndexedValue">&lt;SessionState ContinuousTestingMode="0" IsActive="True" Name="IntegrationTests" xmlns="urn:schemas-jetbrains-com:jetbrains-ut-session"&gt;&#xD;
   &lt;TestAncestor&gt;&#xD;
-    &lt;TestId&gt;NUnit3x::0F2B0F18-23AB-47C5-B76E-DB66506C07C1::net8.0::FrankenBit.BoltWire.IntegrationTests&lt;/TestId&gt;&#xD;
+    &lt;TestId&gt;NUnit3x::0F2B0F18-23AB-47C5-B76E-DB66506C07C1::net8.0::FrankenBit.BoltWire.TestCacheRegistrationBase&lt;/TestId&gt;&#xD;
   &lt;/TestAncestor&gt;&#xD;
 &lt;/SessionState&gt;</s:String></wpf:ResourceDictionary>
