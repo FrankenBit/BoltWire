@@ -4,8 +4,8 @@ namespace FrankenBit.BoltWire.Exceptions;
 
 public sealed class FactoryReturnedNullException : ServiceResolutionException
 {
-    internal FactoryReturnedNullException(Type serviceType)
-        : base(serviceType, $"Factory for {serviceType} returned null.")
+    private FactoryReturnedNullException(Type serviceType)
+        : base(serviceType, $"Factory for {serviceType.Name} returned null.")
     {
     }
         

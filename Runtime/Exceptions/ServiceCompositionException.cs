@@ -9,10 +9,5 @@ public abstract class ServiceCompositionException : ServiceResolutionException
         : base(serviceType, message) =>
         DependencyType = dependencyType ?? throw new ArgumentNullException(nameof(dependencyType));
 
-    protected ServiceCompositionException(Type serviceType, Type dependencyType,
-        string message, Exception innerException)
-        : base(serviceType, message, innerException) =>
-        DependencyType = dependencyType;
-
     public Type DependencyType { get; }
 }

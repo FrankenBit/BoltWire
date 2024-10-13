@@ -4,8 +4,8 @@ namespace FrankenBit.BoltWire.Exceptions;
 
 public sealed class ServiceDoesNotImplementAnyInterfacesException : ServiceRegistrationException
 {
-    private ServiceDoesNotImplementAnyInterfacesException(Type type)
-        : base(type, $"Service of type {type} does not implement any interfaces.")
+    private ServiceDoesNotImplementAnyInterfacesException(Type serviceType)
+        : base(serviceType, $"{serviceType.Name} does not implement any interfaces.")
     {
     }
     
