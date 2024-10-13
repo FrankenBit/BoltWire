@@ -1,4 +1,5 @@
-﻿using NUnit.Framework;
+﻿using FrankenBit.BoltWire.Stubs;
+using NUnit.Framework;
 
 namespace FrankenBit.BoltWire.Exceptions;
 
