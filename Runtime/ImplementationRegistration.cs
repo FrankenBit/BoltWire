@@ -9,14 +9,13 @@ namespace FrankenBit.BoltWire;
 internal static class ImplementationRegistration
 {
     internal static IServicePartRegistration<TService> Create<TService, TImplementation>(
-        IConstructorSelector constructorSelector, ServiceLifetime lifetime)
+        ConstructorInfo constructor, ServiceLifetime lifetime)
         where TService : class
         where TImplementation : TService
     {
         if (IsTransientHidingDisposable<TService, TImplementation>(lifetime))
             throw HiddenDisposableRegistrationException.For<TService, TImplementation>();
 
-        ConstructorInfo constructor = constructorSelector.SelectConstructor<TImplementation>();
         IEnumerable<Type> dependencies = constructor.GetParameters()
             .Select(parameter => parameter.ParameterType);
         return new ImplementationRegistration<TService, TImplementation>(constructor, dependencies, lifetime);
