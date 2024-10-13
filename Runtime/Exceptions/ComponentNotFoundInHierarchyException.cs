@@ -5,7 +5,7 @@ namespace FrankenBit.BoltWire.Exceptions;
 public sealed class ComponentNotFoundInHierarchyException : ServiceRegistrationException
 {
     private ComponentNotFoundInHierarchyException(Type serviceType)
-        : base(serviceType, $"Component of type {serviceType} not found in hierarchy")
+        : base(serviceType, $"Component of type {serviceType.Name} not found in hierarchy.")
     {
     }
 

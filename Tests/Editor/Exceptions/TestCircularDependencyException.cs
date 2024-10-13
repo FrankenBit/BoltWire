@@ -10,12 +10,4 @@ public sealed class TestCircularDependencyException
         Assert.That(new CircularDependencyException(typeof(ITestService), typeof(TestService)).Message,
         Is.EqualTo("Recursive composition detected for ITestService service dependency TestService."));
     }
-
-    private interface ITestService
-    {
-    }
-
-    private sealed class TestService : ITestService
-    {
-    }
 }
