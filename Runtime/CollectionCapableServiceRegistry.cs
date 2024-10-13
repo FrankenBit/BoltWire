@@ -1,7 +1,7 @@
 ﻿using System;
 using System.Collections;
 using System.Diagnostics.CodeAnalysis;
-using System.Linq;
+using System.Reflection;
 
 namespace FrankenBit.BoltWire;
 
@@ -12,11 +12,11 @@ internal sealed class CollectionCapableServiceRegistry : IServiceRegistry
     internal CollectionCapableServiceRegistry(IServiceRegistry registry) =>
         _registry = registry;
 
-    public IConstructorSelector ConstructorSelector =>
-        _registry.ConstructorSelector;
-
     public IServiceRegistration<TService> GetRegistration<TService>(string? key) where TService : class =>
         _registry.GetRegistration<TService>(key);
+
+    public ConstructorInfo SelectConstructor(Type implementationType) =>
+        _registry.SelectConstructor(implementationType);
 
     public bool TryGetRegistration(Type serviceType, string? key,
         [NotNullWhen(true)] out IServiceRegistration? registration) =>
