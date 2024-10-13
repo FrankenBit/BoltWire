@@ -25,18 +25,18 @@ internal sealed class FactoryRegistration<TService> : IServicePartRegistration<T
 
     public ServiceLifetime Lifetime { get; }
 
-    public TService Resolve(ServiceContext context, IReadOnlyCollection<object> dependencies) =>
+    public TService Resolve(IServiceContext context, IReadOnlyCollection<object> dependencies) =>
         context.Track(Create(context), Lifetime);
 
-    private TService Create(ServiceContext context) =>
+    private TService Create(IServiceContext context) =>
         _factory.Invoke(new FactoryServiceProvider(context)) ??
         throw FactoryReturnedNullException.For<TService>();
 
     private sealed class FactoryServiceProvider : IServiceProvider
     {
-        private readonly ServiceContext _context;
+        private readonly IServiceContext _context;
 
-        internal FactoryServiceProvider(ServiceContext context) =>
+        internal FactoryServiceProvider(IServiceContext context) =>
             _context = context;
 
         public object GetService(Type serviceType) =>

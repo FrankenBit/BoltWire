@@ -32,10 +32,10 @@ internal sealed class ImplementationRegistration<TService, TImplementation> : IS
 
     public ServiceLifetime Lifetime { get; }
 
-    public TService Resolve(ServiceContext context, IReadOnlyCollection<object> dependencies) =>
+    public TService Resolve(IServiceContext context, IReadOnlyCollection<object> dependencies) =>
         context.Track(Create(context, dependencies), Lifetime);
 
-    private TService Create(ServiceContext context, IReadOnlyCollection<object> dependencies)
+    private TService Create(IServiceContext context, IReadOnlyCollection<object> dependencies)
     {
         Dictionary<Type, object> suppliedDependencies = dependencies.ToDictionary(instance => instance.GetType());
 
