@@ -4,8 +4,8 @@ namespace FrankenBit.BoltWire.Exceptions;
 
 public sealed class ServiceNotRegisteredException : ServiceResolutionException
 {
-    private ServiceNotRegisteredException(Type type)
-        : base(type, $"Service of type {type} is not registered.")
+    private ServiceNotRegisteredException(Type serviceType)
+        : base(serviceType, $"{serviceType.Name} is not registered.")
     {
     }
 

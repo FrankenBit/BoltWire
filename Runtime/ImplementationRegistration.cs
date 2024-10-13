@@ -14,7 +14,7 @@ internal static class ImplementationRegistration
         where TImplementation : TService
     {
         if (IsTransientHidingDisposable<TService, TImplementation>(lifetime))
-            throw HiddenDisposableRegistrationException.Of<TService, TImplementation>();
+            throw HiddenDisposableRegistrationException.For<TService, TImplementation>();
 
         ConstructorInfo constructor = constructorSelector.SelectConstructor<TImplementation>();
         IEnumerable<Type> dependencies = constructor.GetParameters()

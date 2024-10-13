@@ -8,10 +8,4 @@ public abstract class ServiceRegistrationException : ContainerException
         : base(serviceType, message)
     {
     }
-
-    protected ServiceRegistrationException(Type serviceType, string message,
-        Exception innerException)
-        : base(serviceType, message, innerException)
-    {
-    }
 }

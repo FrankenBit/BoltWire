@@ -8,10 +8,4 @@ public abstract class ServiceResolutionException : ContainerException
         : base(serviceType, message)
     {
     }
-
-    protected ServiceResolutionException(Type serviceType, string message,
-        Exception innerException)
-        : base(serviceType, message, innerException)
-    {
-    }
 }
