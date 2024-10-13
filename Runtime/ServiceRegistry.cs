@@ -92,7 +92,7 @@ internal sealed class ServiceRegistry : IServiceRegistry
             ResolveAll(context);
 
         private static bool IsComposite(IServicePartRegistration<TService> registration) =>
-            SupportedCollectionTypes.For<TService>().Any(registration.Dependencies.Contains);
+            CompositeType.IsComposite<TService>(registration.Dependencies);
 
         private static bool IsDecorator(IServicePartRegistration<TService> registration) =>
             registration.Dependencies.Contains(typeof(TService));

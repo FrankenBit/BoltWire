@@ -26,10 +26,7 @@ internal sealed class CollectionCapableServiceRegistry : IServiceRegistry
     private bool TryGetCollectionRegistration(Type serviceCollectionType, string? key, out IServiceRegistration? registration)
     {
         registration = default;
-        if (serviceCollectionType.GenericTypeArguments.Length != 1) return false;
-
-        Type serviceType = serviceCollectionType.GenericTypeArguments.Single();
-        if (!SupportedCollectionTypes.For(serviceType).Contains(serviceCollectionType)) return false;
+        if (!CompositeType.TryGetItemType(serviceCollectionType, out Type? serviceType)) return false;
 
         if (!_registry.TryGetRegistration(serviceType, key, out IServiceRegistration? innerRegistration))
             return false;
