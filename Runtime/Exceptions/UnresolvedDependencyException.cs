@@ -6,7 +6,7 @@ public sealed class UnresolvedDependencyException : ServiceCompositionException
 {
     internal UnresolvedDependencyException(Type serviceType, Type dependencyType)
         : base(serviceType, dependencyType,
-        $"Dependency of type {dependencyType} required by {serviceType} could not be resolved.")
+        $"{serviceType.Name} dependency {dependencyType.Name} could not be resolved.")
     {
     }
 
