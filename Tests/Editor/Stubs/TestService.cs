@@ -1,4 +1,4 @@
-﻿namespace FrankenBit.BoltWire.Exceptions;
+﻿namespace FrankenBit.BoltWire.Stubs;
 
 internal sealed class TestService : ITestService
 {
