@@ -175,9 +175,9 @@ public static class ExtensionsForIServiceCollection
 
         public void Configure(IServiceRegistry registry)
         {
-            IServicePartRegistration<TService> partRegistration =
-                ImplementationRegistration.Create<TService, TService>(registry.ConstructorSelector, Lifetime)
-                    .CacheIfNeeded();
+            IServicePartRegistration<TService> partRegistration = ImplementationRegistration
+                .Create<TService, TService>(registry.SelectConstructor(typeof(TService)), Lifetime)
+                .CacheIfNeeded();
 
             foreach (IServiceRegistration registration in registry.GetInterfaceRegistrations<TService>(Key))
                 registration.Add(partRegistration);

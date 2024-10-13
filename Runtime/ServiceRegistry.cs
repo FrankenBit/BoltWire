@@ -3,27 +3,31 @@ using System.Collections;
 using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
 using System.Linq;
+using System.Reflection;
 using FrankenBit.BoltWire.Exceptions;
 
 namespace FrankenBit.BoltWire;
 
 internal sealed class ServiceRegistry : IServiceRegistry
 {
+    private readonly IConstructorSelector _constructorSelector;
+
     private readonly Dictionary<Type, IServiceGroupRegistration> _registrations = new();
 
     internal ServiceRegistry(IConstructorSelector constructorSelector) =>
-        ConstructorSelector = constructorSelector;
-
-    public IConstructorSelector ConstructorSelector { get; }
+        _constructorSelector = constructorSelector;
 
     public IServiceRegistration<TService> GetRegistration<TService>(string? key) where TService : class
     {
         ServiceGroupRegistration<TService> typedRegistrations =
             _registrations.TryGetValue(typeof(TService), out IServiceGroupRegistration? descriptors)
                 ? (ServiceGroupRegistration<TService>)descriptors
-                : Store(new ServiceGroupRegistration<TService>(ConstructorSelector));
+                : Store(new ServiceGroupRegistration<TService>(_constructorSelector));
         return typedRegistrations.GetRegistration(key);
     }
+
+    public ConstructorInfo SelectConstructor(Type implementationType) =>
+        _constructorSelector.SelectConstructor(implementationType);
 
     public bool TryGetRegistration(Type serviceType, string? key,
         [NotNullWhen(true)] out IServiceRegistration? registration)
@@ -75,7 +79,8 @@ internal sealed class ServiceRegistry : IServiceRegistry
             _parts.Add(new SingletonRegistration<TService>(instance));
 
         public void Register<TImplementation>(ServiceLifetime lifetime) where TImplementation : TService =>
-            Add(ImplementationRegistration.Create<TService, TImplementation>(_constructorSelector, lifetime));
+            Add(ImplementationRegistration.Create<TService, TImplementation>(
+            _constructorSelector.SelectConstructor(typeof(TImplementation)), lifetime));
 
         public void Register(Func<IServiceProvider, TService> factory, ServiceLifetime lifetime) =>
             Add(new FactoryRegistration<TService>(factory, lifetime));
