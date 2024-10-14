@@ -10,23 +10,79 @@ namespace FrankenBit.BoltWire;
 
 public sealed class TestCollectionCapableServiceRegistry
 {
-    private readonly StubRegistry _stubRegistry = new();
-
     [Test]
     public void GetRegistration_WithParams_ForwardsToBaseRegistry()
     {
-        _ = new CollectionCapableServiceRegistry(_stubRegistry).GetRegistration<object>(null);
+        var registry = new StubRegistry();
 
-        Assert.That(_stubRegistry.GetRegistrationCallCount, Is.EqualTo(1));
+        _ = new CollectionCapableServiceRegistry(registry).GetRegistration<object>(null);
+
+        Assert.That(registry.GetRegistrationCallCount, Is.EqualTo(1));
+    }
+
+    [Test]
+    public void SelectConstructor_WithParams_ForwardsToBaseRegistry()
+    {
+        var registry = new StubRegistry();
+
+        _ = new CollectionCapableServiceRegistry(registry).SelectConstructor(typeof(TestService));
+
+        Assert.That(registry.SelectConstructorCallCount, Is.EqualTo(1));
     }
 
     [Test]
     public void TryGetRegistration_Collection_RegistryHasPrecedence()
     {
-        _ = new CollectionCapableServiceRegistry(_stubRegistry).TryGetRegistration(typeof(IEnumerable<TestService>),
+        var registry = new StubRegistry();
+
+        _ = new CollectionCapableServiceRegistry(registry).TryGetRegistration(typeof(IEnumerable<TestService>),
                  default, out IServiceRegistration? registration);
 
-        Assert.That(registration, Is.SameAs(_stubRegistry.CollectionRegistration));
+        Assert.That(registration, Is.SameAs(registry.CollectionRegistration));
+    }
+
+    [Test]
+    public void TryGetRegistration_NonCollection_ForwardsOnlyOnce()
+    {
+        var registry = new StubRegistry();
+
+        _ = new CollectionCapableServiceRegistry(registry).TryGetRegistration(typeof(TestService),
+                 default, out IServiceRegistration? _);
+
+        Assert.That(registry.TryGetRegistrationCallCount, Is.EqualTo(1));
+    }
+
+    [Test]
+    public void TryGetRegistration_NonCollection_ReturnsFalse()
+    {
+        var registry = new StubRegistry();
+
+        bool result = new CollectionCapableServiceRegistry(registry).TryGetRegistration(typeof(TestService),
+                 default, out IServiceRegistration? _);
+
+        Assert.That(result, Is.False);
+    }
+
+    [Test]
+    public void TryGetRegistration_RegisteredType_ReturnsTrue()
+    {
+        var registry = new StubRegistry();
+
+        bool result = new CollectionCapableServiceRegistry(registry)
+            .TryGetRegistration(typeof(IEnumerable<ITestService>), default, out IServiceRegistration? _);
+
+        Assert.That(result, Is.True);
+    }
+
+    [Test]
+    public void TryGetRegistration_UnregisteredType_ReturnsFalse()
+    {
+        var registry = new StubRegistry();
+
+        bool result = new CollectionCapableServiceRegistry(registry)
+            .TryGetRegistration(typeof(IEnumerable<OtherTestService>), default, out IServiceRegistration? _);
+
+        Assert.That(result, Is.False);
     }
 
     private sealed class StubRegistry : IServiceRegistry
@@ -36,23 +92,37 @@ public sealed class TestCollectionCapableServiceRegistry
 
         internal int GetRegistrationCallCount { get; private set; }
 
+        internal int SelectConstructorCallCount { get; private set; }
+
+        internal int TryGetRegistrationCallCount { get; private set; }
+
         public IServiceRegistration<TService> GetRegistration<TService>(string? key) where TService : class
         {
             GetRegistrationCallCount++;
             return new StubRegistration<TService>();
         }
 
-        public ConstructorInfo SelectConstructor(Type implementationType) =>
-            throw new NotImplementedException();
+        public ConstructorInfo SelectConstructor(Type implementationType)
+        {
+            SelectConstructorCallCount++;
+            return implementationType.GetConstructors()[0];
+        }
 
         public bool TryGetRegistration(Type serviceType, string? key,
             [NotNullWhen(true)] out IServiceRegistration? registration)
         {
-            registration = serviceType == typeof(IEnumerable<TestService>)
-                ? CollectionRegistration
-                : null;
+            TryGetRegistrationCallCount++;
+            registration = GetRegistration(serviceType);
             return registration is not null;
         }
+
+        private IServiceRegistration? GetRegistration(Type serviceType) =>
+            serviceType switch
+            {
+                _ when serviceType == typeof(ITestService) => new StubRegistration<ITestService>(),
+                _ when serviceType == typeof(IEnumerable<TestService>) => CollectionRegistration,
+                _ => null
+            };
     }
 
     private sealed class StubRegistration<TService> : IServiceRegistration<TService> where TService : class
