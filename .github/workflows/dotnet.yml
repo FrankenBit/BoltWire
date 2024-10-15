@@ -66,9 +66,8 @@ jobs:
       run: dotnet tool restore
 
     - name: Run Stryker.NET
+      working-directory: Tests/Editor
       run: dotnet stryker
-      with:
-        path: Tests/Editor
 
     - name: Build Stryker.NET Report
       uses: actions/upload-artifact@v3
