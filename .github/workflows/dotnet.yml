@@ -11,7 +11,6 @@ on:
 
 jobs:
   build:
-
     runs-on: ubuntu-latest
 
     steps:
@@ -49,8 +48,18 @@ jobs:
     - name: Write to Job Summary
       run: cat code-coverage-results.md >> $GITHUB_STEP_SUMMARY
 
-    - name: Restore tools
-      run: dotnet tool restore
+  mutation-test:
+    runs-on: ubuntu-latest
 
-    - name: Stryker.NET
-      run: dotnet stryker
+    steps:
+    - uses: actions/checkout@v3
+
+    - uses: stryker-mutator/github-action@v0.0.1
+      with:
+        testProject: "Tests/Editor/"
+        breakAt: "75"
+
+    - uses: actions/upload-artifact@v3
+      with:
+        name: html-report
+        path: ${{github.workspace}}/Tests/Editor/StrykerOutput/**/**/*.html
