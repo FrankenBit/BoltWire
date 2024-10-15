@@ -70,8 +70,7 @@ jobs:
       run: dotnet stryker
 
     - name: Build Stryker.NET Report
-      uses: michaelhenry/create-report@v2.0.2
+      uses: actions/upload-artifact@v4
       with:
-        title: "Stryker.NET Report"
+        name: html-report
         path: ${{github.workspace}}/Tests/Editor/StrykerOutput/**/**/*.html
-        format: html
