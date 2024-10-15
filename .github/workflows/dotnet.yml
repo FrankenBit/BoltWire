@@ -52,14 +52,20 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-    - uses: actions/checkout@v3
+    - name: Setup Stryker.NET
+      uses: actions/checkout@v3
 
-    - uses: stryker-mutator/github-action@v0.0.1
+    - name: Restore Stryker.NET
+      run: dotnet tool restore
+
+    - name: Run Stryker.NET
+      uses: stryker-mutator/github-action@v0.0.1
       with:
         testProject: "Tests/Editor/"
         breakAt: "75"
 
-    - uses: actions/upload-artifact@v3
+    - name: Build Stryker.NET Report
+      uses: actions/upload-artifact@v3
       with:
         name: html-report
         path: ${{github.workspace}}/Tests/Editor/StrykerOutput/**/**/*.html
