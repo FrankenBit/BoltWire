@@ -16,6 +16,18 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Solution Items", "Solution 
 		README.md = README.md
 	EndProjectSection
 EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = ".github", ".github", "{5D9219D7-3D1F-4836-8B3B-9D157C36BCEE}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "workflows", "workflows", "{D22578BB-19D4-4F2B-9828-60B39820C747}"
+	ProjectSection(SolutionItems) = preProject
+		.github\workflows\dotnet.yml = .github\workflows\dotnet.yml
+	EndProjectSection
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = ".config", ".config", "{4E3CE88B-1D90-4BE1-904F-3EAE39345A0C}"
+	ProjectSection(SolutionItems) = preProject
+		.config\dotnet-tools.json = .config\dotnet-tools.json
+	EndProjectSection
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -33,6 +45,11 @@ Global
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(NestedProjects) = preSolution
+		{5D9219D7-3D1F-4836-8B3B-9D157C36BCEE} = {DB6CF134-1A49-4654-97F1-991C8C6493DB}
+		{D22578BB-19D4-4F2B-9828-60B39820C747} = {5D9219D7-3D1F-4836-8B3B-9D157C36BCEE}
+		{4E3CE88B-1D90-4BE1-904F-3EAE39345A0C} = {DB6CF134-1A49-4654-97F1-991C8C6493DB}
 	EndGlobalSection
 	GlobalSection(ExtensibilityGlobals) = postSolution
 		SolutionGuid = {EA88EF83-9F42-4952-AED5-62990956828C}

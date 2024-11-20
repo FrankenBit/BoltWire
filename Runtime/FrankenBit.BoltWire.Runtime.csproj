@@ -6,23 +6,11 @@
 
     <Nullable>enable</Nullable>
     <LangVersion>10.0</LangVersion>
-
-    <UnityVersion>6000.0.22f1</UnityVersion>
-    <UnityPath>C:\Program Files\Unity\Hub\Editor\$(UnityVersion)\Editor\Data\PlaybackEngines\windowsstandalonesupport\Variations\mono\Managed</UnityPath>
   </PropertyGroup>
 
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|AnyCPU'">
     <DefineConstants>$(DefineConstants);CODE_ANALYSIS</DefineConstants>
   </PropertyGroup>
-
-  <ItemGroup Condition="'$(OS)' == 'Windows_NT'">
-    <Reference Include="UnityEngine">
-      <HintPath>$(UnityPath)\UnityEngine.dll</HintPath>
-    </Reference>
-    <Reference Include="UnityEngine.CoreModule">
-      <HintPath>$(UnityPath)\UnityEngine.CoreModule.dll</HintPath>
-    </Reference>
-  </ItemGroup>
 
   <ItemGroup Condition="'$(OS)' != 'Windows_NT'">
     <Compile Remove="**\*.u3d.cs" />
@@ -33,5 +21,42 @@
       <Visible>false</Visible>
     </None>
   </ItemGroup>
+
+  <Target Name="DetectUnityVersion" BeforeTargets="PrepareForBuild" Condition="'$(OS)' == 'Windows_NT'">
+    <PropertyGroup>
+      <UnityHub>$(ProgramFiles)\Unity\Hub</UnityHub>
+      <UnityEditors>$(UnityHub)\Editor</UnityEditors>
+    </PropertyGroup>
+
+    <ItemGroup>
+      <SubFiles Include="$(UnityEditors)\*\*.*" />
+    </ItemGroup>
+
+    <ItemGroup>
+      <AllVersions Include="@(SubFiles->'%(RelativeDir)'->Replace('$(UnityEditors)\', '')->Replace('\', ''))" />
+      <Versions Include="%(AllVersions.Identity)" />
+    </ItemGroup>
+
+    <Message Text="Detected Unity Versions: @(Versions)" Importance="high" />
+
+    <PropertyGroup>
+      <UnityVersion>%(Versions.Identity)</UnityVersion>
+    </PropertyGroup>
+
+    <Message Text="Latest Unity Version: $(UnityVersion)" Importance="high" />
+
+    <PropertyGroup>
+      <UnityPath>$(UnityEditors)\$(UnityVersion)\Editor\Data\PlaybackEngines\windowsstandalonesupport\Variations\mono\Managed</UnityPath>
+    </PropertyGroup>
+
+    <ItemGroup>
+      <Reference Include="UnityEngine">
+        <HintPath>$(UnityPath)\UnityEngine.dll</HintPath>
+      </Reference>
+      <Reference Include="UnityEngine.CoreModule">
+        <HintPath>$(UnityPath)\UnityEngine.CoreModule.dll</HintPath>
+      </Reference>
+    </ItemGroup>
+  </Target>
 
 </Project>

@@ -13,3 +13,4 @@ StrykerOutput.meta
 /.NDependOut/**/*.zip
 
 *.user
+/.NDependOut
